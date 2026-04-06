@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>ArchChallenge.CashFlow.Domain.Shared</AssemblyName>
+        <RootNamespace>ArchChallenge.CashFlow.Domain.Shared</RootNamespace>
+    </PropertyGroup>
+
+
+
+</Project>

@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+
+    actor U as Usuário
+    participant A as Angular SPA
+    participant K as Keycloak<br/>(realm: cashflow)
+
+    U->>A: Clica em "Sair"
+
+    A->>A: Remove access_token da memória
+    A->>A: Remove refresh_token da memória
+    A->>A: Remove id_token da memória
+    Note over A: Estado local da sessão limpo
+
+    A->>K: GET /realms/cashflow/protocol/openid-connect/logout<br/>?post_logout_redirect_uri=http://localhost:4200<br/>&id_token_hint=<id_token>
+    Note over K: id_token_hint identifica a sessão SSO<br/>sem expor dados do usuário na URL
+
+    K->>K: Invalida a sessão SSO do usuário
+    K->>K: Revoga o refresh_token associado
+    Note over K: access_token continua tecnicamente válido<br/>até expirar (máx. 5 min) — aceitável pela<br/>curta janela de validade
+
+    K->>A: Redireciona para post_logout_redirect_uri<br/>(http://localhost:4200)
+
+    A->>A: Guard de rota detecta ausência de token<br/>Redireciona para tela de login
+
+    Note over U,K: SSO encerrado — um logout no módulo CashFlow<br/>encerra a sessão também no módulo Dashboard.<br/>Novo acesso a qualquer módulo exigirá novo login.

@@ -1,0 +1,135 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — banco de dados dos serviços
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cashflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # RabbitMQ — broker de mensagens entre serviços
+  # ─────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: cashflow-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Keycloak — Identity Provider (OAuth2/OIDC)
+  # ─────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: cashflow-keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # CashFlow — backend (ASP.NET Core)
+  # ─────────────────────────────────────────────
+  cashflow-api:
+    build:
+      context: ./services/cashflow/backend
+      dockerfile: Dockerfile
+    container_name: cashflow-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=cashflow_db;Username=postgres;Password=postgres"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: rabbit
+      RabbitMQ__Password: rabbit
+      Keycloak__Authority: "http://keycloak:8080/realms/cashflow"
+      Keycloak__Audience: cashflow-api
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Dashboard — backend (ASP.NET Core)
+  # ─────────────────────────────────────────────
+  dashboard-api:
+    build:
+      context: ./services/dashboard/backend
+      dockerfile: Dockerfile
+    container_name: dashboard-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=dashboard_db;Username=postgres;Password=postgres"
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: rabbit
+      RabbitMQ__Password: rabbit
+      Keycloak__Authority: "http://keycloak:8080/realms/cashflow"
+      Keycloak__Audience: dashboard-api
+    ports:
+      - "5002:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  cashflow-network:
+    driver: bridge

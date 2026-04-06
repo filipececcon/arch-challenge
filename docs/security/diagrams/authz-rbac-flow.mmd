@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+
+    actor U as Usuário
+    participant A as Angular SPA
+    participant G as Ocelot Gateway
+    participant T as KeycloakRoles<br/>ClaimsTransformer
+    participant C as CashFlow API
+    participant D as Dashboard API
+
+    Note over U,D: Usuário com role: comerciante
+
+    U->>A: Acessa módulo de Lançamentos
+    A->>G: GET /cashflow/v1/transaction<br/>Authorization: Bearer <JWT>
+
+    G->>G: Decodifica JWT<br/>Encontra realm_access.roles = ["comerciante"]
+
+    Note over G,T: O Ocelot lê o claim "roles" no nível raiz.<br/>Keycloak coloca em realm_access.roles.<br/>O transformer faz o mapeamento.
+
+    G->>T: TransformAsync(ClaimsPrincipal)
+    T->>T: Lê claim "realm_access"<br/>Extrai roles do JSON aninhado<br/>Adiciona claim ClaimTypes.Role = "comerciante"
+    T->>G: ClaimsPrincipal enriquecido
+
+    G->>G: RouteClaimsRequirement:<br/>rota /cashflow/** exige "comerciante" ou "admin"<br/>✅ claim "comerciante" encontrado
+
+    G->>C: Roteia com headers:<br/>X-User-Id: <sub><br/>X-User-Roles: comerciante<br/>X-Correlation-Id: <uuid>
+    C->>G: 200 OK + dados
+    G->>A: 200 OK + dados
+
+    Note over U,D: Mesmo usuário tenta acessar Dashboard
+
+    U->>A: Tenta acessar módulo de Consolidado
+    A->>G: GET /dashboard/v1/consolidate<br/>Authorization: Bearer <JWT>
+
+    G->>T: TransformAsync(ClaimsPrincipal)
+    T->>G: ClaimsPrincipal com role "comerciante"
+
+    G->>G: RouteClaimsRequirement:<br/>rota /dashboard/** exige "gestor" ou "admin"<br/>❌ claim "comerciante" não autorizado
+
+    G->>A: 403 Forbidden
+    Note over A: Angular esconde o módulo Dashboard<br/>no menu (guard de rota), mas o Gateway<br/>é a barreira de segurança real

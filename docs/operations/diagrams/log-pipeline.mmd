@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+
+    participant App as Aplicação<br/>(CashFlow / Dashboard / Gateway)
+    participant Stdout as stdout<br/>(container Docker)
+    participant Docker as Docker Engine<br/>/var/lib/docker/containers/
+    participant FB as Fluent Bit
+    participant Buf as Buffer em Disco<br/>(volume Docker)
+    participant ES as Elasticsearch
+    participant KB as Kibana
+
+    App->>Stdout: Serilog.WriteTo.Console(ElasticsearchJsonFormatter)<br/>{"@timestamp":"...","level":"Info","message":"..."}
+    Stdout->>Docker: Docker captura stdout e grava em arquivo JSON<br/>/var/lib/docker/containers/<id>/<id>-json.log
+
+    loop A cada 5 segundos (flush interval)
+        FB->>Docker: tail /var/lib/docker/containers/*/*.log<br/>(lê novos registros desde o último offset)
+        Docker->>FB: Linhas JSON brutas do Docker
+
+        FB->>FB: Parser "docker" decodifica o envelope Docker<br/>Extrai campo "log" (conteúdo real do Serilog)<br/>Enriquece com metadados: container_name, image, labels
+
+        alt Elasticsearch disponível
+            FB->>ES: POST /_bulk (lote de logs)<br/>Índice: cashflow-logs-YYYY.MM.DD
+            ES->>FB: 200 OK
+            FB->>FB: Salva novo offset (não reprocessa)
+        else Elasticsearch indisponível
+            FB->>Buf: Persiste chunks em disco<br/>/var/log/fluentbit/buffer/<timestamp>.chunk
+            Note over Buf: Buffer cresce até ES voltar<br/>Sobrevive a restart do Fluent Bit
+        end
+    end
+
+    Note over FB,Buf: Quando Elasticsearch volta
+
+    FB->>Buf: Lê chunks pendentes do disco
+    Buf->>FB: Chunks não entregues
+    FB->>ES: POST /_bulk (reentrega dos chunks)
+    ES->>FB: 200 OK
+    FB->>Buf: Remove chunks entregues com sucesso
+
+    ES->>KB: Kibana indexa e disponibiliza para pesquisa
+    Note over KB: Logs pesquisáveis em Kibana<br/>Correlacionados com traces do APM<br/>via trace.id injetado pelo Elastic APM Agent

@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+
+    actor U as Usuário
+    participant A as Angular SPA
+    participant K as Keycloak<br/>(realm: cashflow)
+    participant G as Ocelot Gateway
+    participant C as CashFlow API /<br/>Dashboard API
+
+    U->>A: Acessa /cashflow ou /dashboard
+    A->>A: Verifica token em memória
+    Note over A: Token ausente ou expirado
+
+    A->>A: Gera code_verifier (aleatório)<br/>code_challenge = SHA-256(code_verifier)
+
+    A->>K: GET /auth?client_id=cashflow-frontend<br/>&response_type=code<br/>&code_challenge=<hash><br/>&code_challenge_method=S256
+    K->>U: Exibe tela de login
+
+    U->>K: Insere credenciais
+    K->>K: Valida usuário e senha
+    K->>A: Redireciona com authorization_code<br/>(válido por ~1 minuto)
+
+    A->>K: POST /token<br/>grant_type=authorization_code<br/>&code=<authorization_code><br/>&code_verifier=<verifier>
+    Note over K: Valida code_verifier contra<br/>code_challenge armazenado
+    K->>A: Retorna access_token (JWT, 5min)<br/>+ refresh_token (opaque, 30min)<br/>+ id_token (JWT, perfil)
+
+    A->>A: Armazena tokens em MEMÓRIA<br/>(não em localStorage)
+
+    U->>A: Interage com a aplicação
+    A->>G: GET /cashflow/v1/transaction<br/>Authorization: Bearer <access_token>
+
+    G->>K: GET /protocol/openid-connect/certs<br/>(busca chave pública JWKS — cacheada)
+    K->>G: Retorna chaves públicas (JWKS)
+
+    G->>G: Valida assinatura do JWT<br/>Valida issuer, audience, expiração<br/>Executa KeycloakRolesClaimsTransformer<br/>Verifica RouteClaimsRequirement (roles)
+
+    alt Token válido e role autorizada
+        G->>C: Roteia requisição com headers<br/>X-User-Id, X-User-Roles, X-Correlation-Id
+        C->>G: Resposta da API
+        G->>A: Resposta ao cliente
+    else Token inválido ou expirado
+        G->>A: 401 Unauthorized
+        A->>K: POST /token (silent renew)<br/>grant_type=refresh_token<br/>&refresh_token=<token>
+        K->>A: Novo access_token
+        A->>G: Repete requisição com novo token
+    else Role insuficiente
+        G->>A: 403 Forbidden
+    end
