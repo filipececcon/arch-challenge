@@ -14,35 +14,42 @@ public class RegisterTransactionHandlerTests
 {
     private readonly IWriteRepository<Transaction> _repository;
     private readonly IPublisher _publisher;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ITransaction _transaction;
     private readonly RegisterTransactionHandler _handler;
 
     public RegisterTransactionHandlerTests()
     {
         _repository = Substitute.For<IWriteRepository<Transaction>>();
         _publisher = Substitute.For<IPublisher>();
-        _handler = new RegisterTransactionHandler(_repository, _publisher);
+        _transaction = Substitute.For<ITransaction>();
+        _unitOfWork = Substitute.For<IUnitOfWork>();
+        _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(_transaction);
+        _handler = new RegisterTransactionHandler(_repository, _publisher, _unitOfWork);
     }
 
     [Fact]
-    public async Task Handle_WithValidData_ShouldReturnSuccessAndPublishEvent()
+    public async Task Handle_WithValidData_ShouldCommitAndPublishEvent()
     {
         var command = new RegisterTransactionCommand(
             TransactionType.Credit,
             150.00m,
             "Cash sale");
 
-        _repository.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Should().NotBeNull();
-        result.Value!.Id.Should().NotBeEmpty();
-        result.Value.Type.Should().Be(TransactionType.Credit);
-        result.Value.Amount.Should().Be(150.00m);
+        result.IsValid.Should().BeTrue();
+        result.Should().NotBeNull();
+        result.Id.Should().NotBeEmpty();
+        result.Type.Should().Be(TransactionType.Credit);
+        result.Amount.Should().Be(150.00m);
 
         await _repository.Received(1).AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
-        await _repository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _transaction.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        await _transaction.DidNotReceive().RollbackAsync(Arg.Any<CancellationToken>());
         await _publisher.Received(1).Publish(
             Arg.Is<INotification>(n => n is DomainEventNotification<TransactionRegisteredEvent>),
             Arg.Any<CancellationToken>());
@@ -53,28 +60,47 @@ public class RegisterTransactionHandlerTests
     {
         var command = new RegisterTransactionCommand(TransactionType.Debit, 300m, "Stock purchase");
 
-        _repository.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.Type.Should().Be(TransactionType.Debit);
-        result.Value.Amount.Should().Be(300m);
-        result.Value.Description.Should().Be("Stock purchase");
+        result.IsValid.Should().BeTrue();
+        result.Type.Should().Be(TransactionType.Debit);
+        result.Amount.Should().Be(300m);
+        result.Description.Should().Be("Stock purchase");
     }
 
     [Fact]
-    public async Task Handle_WithInvalidAmount_ShouldReturnFailureWithoutPersisting()
+    public async Task Handle_WithInvalidAmount_ShouldCommitWithoutPersistingOrPublishing()
     {
         var command = new RegisterTransactionCommand(TransactionType.Debit, -50m, null);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().ContainSingle(e => e.Field == "Amount");
+        result.IsValid.Should().BeTrue();
+        result.Notifications.Should().ContainSingle(e => e.Key == "Amount");
 
         await _repository.DidNotReceive().AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
-        await _repository.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _transaction.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        await _transaction.DidNotReceive().RollbackAsync(Arg.Any<CancellationToken>());
+        await _publisher.DidNotReceive().Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenRepositoryThrows_ShouldRollbackAndNotPublish()
+    {
+        var command = new RegisterTransactionCommand(TransactionType.Credit, 100m, "Test");
+
+        _repository
+            .AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("DB error")));
+
+        var act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        await _transaction.Received(1).RollbackAsync(Arg.Any<CancellationToken>());
+        await _transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
         await _publisher.DidNotReceive().Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>());
     }
 }

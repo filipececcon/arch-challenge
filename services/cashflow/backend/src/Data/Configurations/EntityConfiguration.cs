@@ -30,5 +30,7 @@ public abstract class EntityConfiguration<TEntity> : IEntityTypeConfiguration<TE
             .Property(x => x.Active)
             .HasColumnName("ST_ACTIVE")
             .IsRequired();
+        
+        builder.Ignore(t => t.Notifications);
     }
 }

@@ -4,18 +4,17 @@
 
 A proteção das APIs é responsabilidade primária do **Ocelot API Gateway**, que atua como único ponto de entrada externo. As APIs downstream ficam isoladas na rede interna Docker e nunca recebem tráfego direto do exterior.
 
-```
-[Internet / Clientes]
-        │
-        ▼
-[Ocelot Gateway :5000]  ← ÚNICO ponto de entrada externo
-   • Rate Limiting
-   • CORS
-   • JWT Validation
-   • RouteClaimsRequirement
-        │
-        ▼ (rede Docker interna)
-[CashFlow :8080]  [Dashboard :8080]  ← inacessíveis externamente
+```mermaid
+graph TD
+    Internet(["🌐 Internet / Clientes"])
+    Internet --> GW
+
+    subgraph GW_ZONE["ÚNICO ponto de entrada externo"]
+        GW["Ocelot Gateway :5000<br/>• Rate Limiting<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement"]
+    end
+
+    GW -->|"rede Docker interna"| CF["CashFlow API :8080<br/>(inacessível externamente)"]
+    GW -->|"rede Docker interna"| DB["Dashboard API :8080<br/>(inacessível externamente)"]
 ```
 
 ---

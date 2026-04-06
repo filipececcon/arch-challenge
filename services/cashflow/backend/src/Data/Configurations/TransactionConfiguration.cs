@@ -32,7 +32,5 @@ public class TransactionConfiguration : EntityConfiguration<Transaction>
             .Property(t => t.Description)
             .HasColumnName("DS_TRANSACTION")
             .HasMaxLength(255);
-
-        builder.Ignore(t => t.Events);
     }
 }

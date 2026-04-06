@@ -13,7 +13,7 @@ public class TransactionsController(IMediator mediator) : ControllerBase
 {
     /// <summary>Registers a new financial transaction (credit or debit).</summary>
     [HttpPost]
-    [ProducesResponseType(typeof(RegisterTransactionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(RegisterTransactionResult), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
         [FromBody] RegisterTransactionCommand command,
@@ -21,10 +21,10 @@ public class TransactionsController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(command, cancellationToken);
 
-        if (result.IsFailure)
-            return BadRequest(new { type = "DomainError", errors = result.Errors.Select(e => new { field = e.Field, message = e.Message }) });
+        if (!result.IsValid)
+            return BadRequest(new { type = "DomainError", errors = result.Notifications.Select(e => new { field = e.Key, message = e.Message }) });
 
-        return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
+        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
     /// <summary>Returns a transaction by its identifier.</summary>

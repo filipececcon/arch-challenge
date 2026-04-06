@@ -8,6 +8,10 @@
         <RootNamespace>ArchChallenge.CashFlow.Domain.Shared</RootNamespace>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Flunt" Version="2.0.5" />
+    </ItemGroup>
+
 
 
 </Project>

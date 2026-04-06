@@ -10,29 +10,45 @@ Em uma arquitetura de microsserviços, o controle de acesso não se aplica apena
 
 Todos os serviços rodam na mesma rede Docker interna (`cashflow-network`). A segurança de rede é garantida por **não publicar as portas dos serviços downstream externamente**:
 
-```
-[Internet]
-     │
-     │ :5000 (único ponto exposto)
-     ▼
-┌────────────────────────────────────────────────────┐
-│           rede: cashflow-network (Docker)          │
-│                                                    │
-│  [Gateway :5000] ──► [CashFlow API :8080]          │
-│                  ──► [Dashboard API :8080]         │
-│                  ──► [Keycloak :8080]              │
-│                                                    │
-│  [CashFlow API] ──► [RabbitMQ :5672]               │
-│  [Dashboard API] ──► [RabbitMQ :5672]              │
-│                                                    │
-│  [CashFlow API] ──► [PostgreSQL :5432]             │
-│  [Dashboard API] ──► [PostgreSQL :5432]            │
-│  [Keycloak] ──► [PostgreSQL :5432]                 │
-│                                                    │
-│  [Fluent Bit] ──► [Elasticsearch :9200]            │
-│  [Kibana] ──► [Elasticsearch :9200]                │
-│  [APM Server] ──► [Elasticsearch :9200]            │
-└────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Internet(["🌐 Internet"])
+
+    Internet -->|":5000"| GW
+    Internet -->|":8080"| KC
+    Internet -->|":15672 — dev"| RMGMT
+    Internet -->|":5601 — dev"| KIB
+    Internet -->|":3000 — dev"| GRF
+
+    subgraph NET["cashflow-network — rede Docker interna"]
+        GW["API Gateway :5000"]
+        KC["Keycloak :8080"]
+        CF["CashFlow API :8080"]
+        DA["Dashboard API :8080"]
+        PG[("PostgreSQL :5432")]
+        RMQ["RabbitMQ :5672"]
+        ES[("Elasticsearch :9200")]
+        FB["Fluent Bit"]
+        APMS["APM Server"]
+        KIB["Kibana :5601"]
+        GRF["Grafana :3000"]
+        RMGMT["RabbitMQ Mgmt :15672"]
+
+        GW --> CF
+        GW --> DA
+        GW --> KC
+
+        CF -->|"publish"| RMQ
+        DA -->|"consume"| RMQ
+
+        CF --> PG
+        DA --> PG
+        KC --> PG
+
+        FB --> ES
+        KIB --> ES
+        APMS --> ES
+    end
 ```
 
 **Portas publicadas externamente** (mapeadas no `docker-compose.yml`):
@@ -63,21 +79,21 @@ Todos os serviços rodam na mesma rede Docker interna (`cashflow-network`). A se
 
 A comunicação entre os dois serviços de negócio é **assíncrona via RabbitMQ** — os serviços não se chamam diretamente via HTTP.
 
-```
-[CashFlow API]
-      │
-      │ publish(LancamentoRegistrado)
-      │ connection: amqp://rabbit:****@rabbitmq:5672
-      ▼
-[RabbitMQ — exchange: cashflow.events]
-      │
-      │ routing key: lancamento.registrado
-      ▼
-[Queue: dashboard.lancamento.registrado]
-      │
-      │ consume (ack manual)
-      ▼
-[Dashboard API]
+```mermaid
+graph TD
+    CF["CashFlow API<br/>(cashflow-service)"]
+
+    subgraph MQ["RabbitMQ :5672"]
+        EX["Exchange: cashflow.events"]
+        Q["Queue: dashboard.lancamento.registrado<br/>durable · ack manual · DLQ"]
+    end
+
+    DA["Dashboard API<br/>(dashboard-service)"]
+
+    CF -->|"publish(LancamentoRegistrado)<br/>amqp://cashflow-service@rabbitmq:5672"| EX
+    EX -->|"routing key: lancamento.registrado"| Q
+    Q -->|"consume"| DA
+    DA -.->|"ack (após processamento bem-sucedido)"| Q
 ```
 
 ### Autenticação no RabbitMQ
@@ -158,19 +174,19 @@ Cada serviço recebe apenas as permissões mínimas necessárias para sua funç�
 
 Quando o Gateway roteia uma requisição para uma API downstream, o contexto do usuário autenticado pode ser propagado via headers customizados:
 
-```
-[Ocelot Gateway]
-      │
-      │ Adiciona headers após validar JWT:
-      │   X-User-Id: <sub do JWT>
-      │   X-User-Roles: comerciante
-      │   X-Correlation-Id: <uuid gerado no gateway>
-      ▼
-[CashFlow API]
-      │
-      │ Lê X-User-Id para associar o lançamento ao usuário
-      │ Lê X-Correlation-Id para correlacionar logs
-      │ NÃO revalida o token — confia nos headers do Gateway
+```mermaid
+sequenceDiagram
+    participant C as Cliente Externo
+    participant G as Ocelot Gateway
+    participant A as CashFlow API
+
+    C->>G: GET /cashflow/v1/... + Authorization: Bearer &lt;JWT&gt;
+    Note over G: Valida JWT (assinatura, expiração)<br/>Extrai claims: sub, roles
+    G->>A: Requisição roteada + headers propagados
+    Note right of G: X-User-Id: &lt;sub do JWT&gt;<br/>X-User-Roles: comerciante<br/>X-Correlation-Id: &lt;uuid gerado no gateway&gt;
+    Note over A: Lê X-User-Id → associa lançamento ao usuário<br/>Lê X-Correlation-Id → correlaciona logs<br/>NÃO revalida o token — confia nos headers do Gateway
+    A-->>G: Resposta
+    G-->>C: Resposta
 ```
 
 > **Segurança:** Esses headers só devem ser aceitos pelas APIs quando vierem da rede Docker interna. Um cliente externo que tente injetar `X-User-Id` no header será bloqueado, pois a requisição passa pelo Gateway antes de chegar às APIs — e o Gateway sobrescreve esses headers com os valores do JWT validado.

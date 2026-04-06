@@ -6,30 +6,31 @@ Este diretório contém a documentação completa da estratégia de segurança a
 
 ## Modelo de segurança em camadas
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  CAMADA 1 — Perímetro (API Gateway)                                 │
-│  • Validação de JWT (assinatura, issuer, audience, expiração)       │
-│  • RBAC por rota (RouteClaimsRequirement)                           │
-│  • Rate limiting                                                    │
-│  • CORS                                                             │
-│  • TLS termination                                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│  CAMADA 2 — Identidade (Keycloak)                                   │
-│  • Autenticação OAuth 2.0 / OIDC                                    │
-│  • Gerenciamento de usuários, roles e sessões                       │
-│  • Emissão e rotação de tokens JWT                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│  CAMADA 3 — Serviços (CashFlow e Dashboard APIs)                    │
-│  • Validação de input (dados financeiros)                           │
-│  • Isolamento por rede Docker (não expostos externamente)           │
-│  • Comunicação interna apenas via Gateway                           │
-├─────────────────────────────────────────────────────────────────────┤
-│  CAMADA 4 — Dados (PostgreSQL)                                      │
-│  • Banco de dados dedicado por serviço (Database per Service)       │
-│  • Credenciais via variáveis de ambiente (secrets em produção)      │
-│  • Criptografia em repouso (recomendada para produção)              │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    Internet(["🌐 Internet / Clientes"])
+    Internet --> GW
+
+    subgraph L1["CAMADA 1 — Perímetro (API Gateway)"]
+        GW["Ocelot API Gateway<br/>Validação de JWT · RBAC por rota (RouteClaimsRequirement)<br/>Rate Limiting · CORS · TLS termination"]
+    end
+
+    GW <-->|"OAuth 2.0 / OIDC"| KC
+    GW --> SVC
+
+    subgraph L2["CAMADA 2 — Identidade (Keycloak)"]
+        KC["Keycloak<br/>Autenticação OAuth 2.0 / OIDC<br/>Gerenciamento de usuários, roles e sessões<br/>Emissão e rotação de tokens JWT"]
+    end
+
+    subgraph L3["CAMADA 3 — Serviços (CashFlow e Dashboard APIs)"]
+        SVC["CashFlow API / Dashboard API<br/>Validação de input (dados financeiros)<br/>Isolamento por rede Docker (não expostos externamente)<br/>Comunicação interna apenas via Gateway"]
+    end
+
+    SVC --> PG
+
+    subgraph L4["CAMADA 4 — Dados (PostgreSQL)"]
+        PG[("PostgreSQL<br/>Database per Service · Credenciais via secrets<br/>Criptografia em repouso (recomendada para produção)")]
+    end
 ```
 
 ---

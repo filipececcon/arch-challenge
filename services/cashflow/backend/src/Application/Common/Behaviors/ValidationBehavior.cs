@@ -1,5 +1,5 @@
-using ArchChallenge.CashFlow.Domain.Shared.Notifications;
 using FluentValidation;
+using Flunt.Notifications;
 using MediatR;
 
 namespace ArchChallenge.CashFlow.Application.Common.Behaviors;
@@ -25,24 +25,24 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
             return await next(cancellationToken);
 
         var notifications = failures
-            .Select(f => Notification.Create(f.PropertyName, f.ErrorMessage))
+            .Select(f => new Notification(f.PropertyName, f.ErrorMessage))
             .ToList();
 
-        if (IsResultType(typeof(TResponse)))
-            return CreateFailureResult(notifications);
+        // if (IsResultType(typeof(TResponse)))
+        //     return CreateFailureResult(notifications);
 
         throw new ValidationException(failures);
     }
 
-    private static bool IsResultType(Type type)
-        => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Result<>);
-
-    private static TResponse CreateFailureResult(IReadOnlyList<Notification> notifications)
-    {
-        var failureMethod = typeof(TResponse).GetMethod(
-            nameof(Result<object>.Failure),
-            [typeof(IReadOnlyList<Notification>)]);
-
-        return (TResponse)failureMethod!.Invoke(null, [notifications])!;
-    }
+    // private static bool IsResultType(Type type)
+    //     => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Result<>);
+    //
+    // private static TResponse CreateFailureResult(IReadOnlyList<Notification> notifications)
+    // {
+    //     var failureMethod = typeof(TResponse).GetMethod(
+    //         nameof(Result<object>.Failure),
+    //         [typeof(IReadOnlyList<Notification>)]);
+    //
+    //     return (TResponse)failureMethod!.Invoke(null, [notifications])!;
+    // }
 }

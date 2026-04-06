@@ -1,4 +1,5 @@
 using ArchChallenge.CashFlow.Application.Common.Notifications;
+using ArchChallenge.CashFlow.Application.Common.Responses;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using MediatR;
 
@@ -7,78 +8,75 @@ namespace ArchChallenge.CashFlow.Application.Common.Handlers;
 /// <summary>
 /// Template Method base para todos os command handlers.
 ///
-/// O método <see cref="Handle"/> orquestra as três etapas na ordem definida
-/// e, ao final, despacha via MediatR todos os eventos levantados com
-/// <see cref="RaiseEvent"/>, ativando qualquer <c>INotificationHandler</c>
-/// registrado — incluindo a publicação no RabbitMQ.
-///
+/// O método <see cref="Handle"/> orquestra as etapas dentro de uma transação de banco de dados:
 ///   1. <see cref="BeforeExecuteAsync"/> — preparação (idempotência, validações de estado).
-///   2. <see cref="ExecuteAsync"/>       — lógica de domínio + persistência (fase Prepare do 2PC).
-///   3. <see cref="AfterExecuteAsync"/>  — pós-processamento e cleanup (fase Commit local).
-///   4. [automático] cada evento coletado é embrulhado em
-///      <see cref="DomainEventNotification{TEvent}"/> e despachado pelo MediatR,
-///      preservando o tipo concreto para roteamento correto dos handlers.
+///   2. <see cref="ExecuteAsync"/>       — lógica de domínio (fase Prepare do 2PC).
+///   3. [automático] <see cref="IUnitOfWork.SaveChangesAsync"/> — persiste todas as alterações.
+///   4. <see cref="AfterExecuteAsync"/>  — pós-processamento e cleanup.
+///   5. [automático] Commit da transação — torna as alterações permanentes.
+///   6. [automático] cada evento coletado via <see cref="RaiseEvent"/> é despachado pelo MediatR
+///      somente após o commit, garantindo consistência entre persistência e mensageria.
 ///
-/// Todos os métodos de template são abstratos, forçando cada handler filho a
-/// declarar explicitamente o comportamento das três etapas.
+/// Em caso de qualquer exceção nas etapas 1–4, o Rollback é executado automaticamente
+/// e a exceção é relançada. Os eventos pendentes são descartados.
+///
+/// O parâmetro genérico <typeparamref name="TEvent"/> define o tipo concreto do evento
+/// de domínio emitido por este handler, eliminando a necessidade de reflexão para criar
+/// o wrapper <see cref="DomainEventNotification{TEvent}"/>.
 /// </summary>
-public abstract class CommandHandlerBase<TCommand, TResponse>(IPublisher publisher)
+public abstract class CommandHandlerBase<TCommand, TResponse, TEvent>(
+    IPublisher publisher,
+    IUnitOfWork unitOfWork)
     : IRequestHandler<TCommand, TResponse>
     where TCommand : IRequest<TResponse>
+    where TEvent : IDomainEvent
+    where TResponse : Result
 {
-    private readonly List<IDomainEvent> _pendingEvents = [];
+    private readonly List<TEvent> _pendingEvents = [];
 
     /// <summary>
-    /// Enfileira um evento de domínio para despacho via MediatR ao final do <see cref="Handle"/>.
+    /// Enfileira um evento de domínio tipado para despacho via MediatR após o commit.
     /// Deve ser chamado dentro de <see cref="ExecuteAsync"/> após a criação/alteração do agregado.
     /// </summary>
-    protected void RaiseEvent(IDomainEvent domainEvent) => _pendingEvents.Add(domainEvent);
+    protected void RaiseEvent(TEvent domainEvent) => _pendingEvents.Add(domainEvent);
 
     // Não sobrescreva este método nas subclasses — estenda o comportamento via
     // BeforeExecuteAsync, ExecuteAsync e AfterExecuteAsync.
     public async Task<TResponse> Handle(TCommand command, CancellationToken cancellationToken)
     {
-        await BeforeExecuteAsync(command, cancellationToken);
-        var response = await ExecuteAsync(command, cancellationToken);
-        await AfterExecuteAsync(command, response, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
-        foreach (var @event in _pendingEvents)
-            await publisher.Publish(WrapAsNotification(@event), cancellationToken);
+        try
+        {
+            var response = await ExecuteAsync(command, cancellationToken);
 
-        _pendingEvents.Clear();
+            if(!response.IsValid) return response;
 
-        return response;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            foreach (var @event in _pendingEvents)
+                await publisher.Publish(new DomainEventNotification<TEvent>(@event), cancellationToken);
+
+            return response;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            _pendingEvents.Clear();
+        }
     }
 
     /// <summary>
-    /// Etapa de pré-execução: preparação, checagens e inicialização de contexto
-    /// que devem ocorrer antes da persistência.
-    /// </summary>
-    protected abstract Task BeforeExecuteAsync(TCommand command, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Etapa de execução principal: lógica de domínio e persistência no banco de dados.
-    /// Chame <see cref="RaiseEvent"/> aqui para registrar eventos a serem despachados.
+    /// Etapa de execução principal: lógica de domínio.
+    /// Chame <see cref="RaiseEvent"/> aqui para registrar eventos a serem despachados após o commit.
+    /// Não é necessário chamar SaveChanges — a base executa automaticamente após este método.
     /// Corresponde à fase Prepare do protocolo 2PC.
     /// </summary>
     protected abstract Task<TResponse> ExecuteAsync(TCommand command, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Etapa de pós-execução: cleanup e finalização após a persistência.
-    /// O despacho dos eventos é gerenciado automaticamente pela base via MediatR.
-    /// Corresponde à fase Commit local do protocolo 2PC.
-    /// </summary>
-    protected abstract Task AfterExecuteAsync(TCommand command, TResponse response, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Cria um <see cref="DomainEventNotification{TEvent}"/> com o tipo concreto do evento,
-    /// preservando a informação de tipo para que o MediatR roteie para o handler correto.
-    /// Ex.: <c>TransactionRegisteredEvent</c> →
-    ///      <c>DomainEventNotification&lt;TransactionRegisteredEvent&gt;</c>.
-    /// </summary>
-    private static INotification WrapAsNotification(IDomainEvent domainEvent)
-    {
-        var notificationType = typeof(DomainEventNotification<>).MakeGenericType(domainEvent.GetType());
-        return (INotification)Activator.CreateInstance(notificationType, domainEvent)!;
-    }
 }
