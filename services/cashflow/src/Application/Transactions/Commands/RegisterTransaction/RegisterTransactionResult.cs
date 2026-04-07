@@ -1,4 +1,3 @@
-using ArchChallenge.CashFlow.Application.Common.Responses;
 using ArchChallenge.CashFlow.Domain.Enums;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;

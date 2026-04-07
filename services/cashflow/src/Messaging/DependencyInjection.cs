@@ -1,13 +1,10 @@
-using ArchChallenge.CashFlow.Domain.Events;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Handlers;
-using MassTransit;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 
-namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.DependencyInjection;
+namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 
-public static class MessagingExtensions
+public static class DependencyInjection
 {
     public static IServiceCollection AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {

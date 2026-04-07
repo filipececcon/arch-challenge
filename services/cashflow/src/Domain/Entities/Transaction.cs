@@ -1,7 +1,4 @@
 using ArchChallenge.CashFlow.Domain.Contracts;
-using ArchChallenge.CashFlow.Domain.Enums;
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 
 namespace ArchChallenge.CashFlow.Domain.Entities;
 

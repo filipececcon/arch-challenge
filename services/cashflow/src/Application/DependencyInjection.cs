@@ -1,8 +1,5 @@
 using ArchChallenge.CashFlow.Application.Common.Behaviors;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;
-using FluentValidation;
-using MediatR;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace ArchChallenge.CashFlow.Application;
 

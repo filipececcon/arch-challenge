@@ -1,6 +1,4 @@
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n;
-using FluentValidation;
-using Microsoft.Extensions.Localization;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;
 

@@ -1,7 +1,6 @@
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace ArchChallenge.CashFlow.Data;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Transactions;
 
 /// <summary>
 /// Adapter que envolve o <see cref="IDbContextTransaction"/> do EF Core

@@ -1,7 +1,4 @@
-using ArchChallenge.CashFlow.Data.Context;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-
-namespace ArchChallenge.CashFlow.Data;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Transactions;
 
 public sealed class UnitOfWork(CashFlowDbContext context) : IUnitOfWork
 {

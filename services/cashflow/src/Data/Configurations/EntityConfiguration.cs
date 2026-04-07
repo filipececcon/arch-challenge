@@ -1,8 +1,4 @@
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
-namespace ArchChallenge.CashFlow.Data.Configurations;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Configurations;
 
 public abstract class EntityConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
     where TEntity : Entity

@@ -1,11 +1,7 @@
-using ArchChallenge.CashFlow.Data.Context;
-using ArchChallenge.CashFlow.Data.Specifications;
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using ArchChallenge.CashFlow.Domain.Shared.Specifications;
-using Microsoft.EntityFrameworkCore;
+using ArchChallenge.CashFlow.Infrastructure.Data.Specifications;
 
-namespace ArchChallenge.CashFlow.Data.Repositories;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Repositories;
 
 public class ReadRepository<T>(CashFlowDbContext context) : IReadRepository<T>
     where T : Entity

@@ -1,6 +1,65 @@
 services:
 
   # ─────────────────────────────────────────────
+  # MongoDB — read model / projeção CQRS
+  #
+  # Função:  armazena a coleção `transactions_view`, uma visão
+  #          desnormalizada das transações sincronizada via
+  #          Transactional Outbox Pattern.
+  #
+  # Acesso local:
+  #   URI:      mongodb://cashflow:cashflow@localhost:27017
+  #   Banco:    cashflow_read
+  #   Coleção:  transactions_view
+  #   UI:       http://localhost:8081  (mongo-express)
+  # ─────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: cashflow-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE:      cashflow_read
+    ports:
+      - "27017:27017"   # protocolo MongoDB (wire protocol)
+    volumes:
+      - mongodb_data:/data/db
+      - ./infra/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # Mongo Express — UI administrativa do MongoDB
+  #
+  # Acesso: http://localhost:8081
+  #   Usuário: admin  |  Senha: admin
+  # ─────────────────────────────────────────────
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: cashflow-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_URL:           mongodb://root:root@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME:    admin
+      ME_CONFIG_BASICAUTH_PASSWORD:    admin
+    ports:
+      - "8081:8081"   # Mongo Express Web UI
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
   # PostgreSQL — banco de dados dos serviços
   # ─────────────────────────────────────────────
   postgres:
@@ -199,16 +258,26 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Host=postgres;Database=cashflow_db;Username=postgres;Password=postgres"
+      # ── PostgreSQL (write model) ───────────────────────────────────────────
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=cashflow_db;Username=postgres;Password=postgres"
+      # ── MongoDB (read model — Transactional Outbox) ───────────────────────
+      # URI: mongodb://cashflow:cashflow@mongodb:27017
+      # Banco: cashflow_read   |   Coleção: transactions_view
+      ConnectionStrings__MongoConnection: "mongodb://cashflow:cashflow@mongodb:27017"
+      MongoDB__Database: cashflow_read
+      # ── RabbitMQ ──────────────────────────────────────────────────────────
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: rabbit
       RabbitMQ__Password: rabbit
+      # ── Keycloak ──────────────────────────────────────────────────────────
       Keycloak__Authority: "http://keycloak:8080/realms/cashflow"
       Keycloak__Audience: cashflow-api
     ports:
       - "5001:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -247,6 +316,23 @@ services:
       - cashflow-network
 
   # ─────────────────────────────────────────────
+  # Frontend — Angular (Nginx)
+  # Acesso: http://localhost:4200
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    container_name: arch-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      - gateway
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
   # API Gateway — Ocelot (ASP.NET Core)
   # ─────────────────────────────────────────────
   gateway:
@@ -275,6 +361,7 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  mongodb_data:
   elasticsearch_data:
   prometheus_data:
   grafana_data:

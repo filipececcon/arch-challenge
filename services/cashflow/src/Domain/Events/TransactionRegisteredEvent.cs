@@ -1,6 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Enums;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-
 namespace ArchChallenge.CashFlow.Domain.Events;
 
 public record TransactionRegisteredEvent(object Payload) : IDomainEvent

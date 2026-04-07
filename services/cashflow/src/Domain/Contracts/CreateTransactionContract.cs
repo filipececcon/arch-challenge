@@ -1,4 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Entities;
 using Flunt.Validations;
 
 namespace ArchChallenge.CashFlow.Domain.Contracts;

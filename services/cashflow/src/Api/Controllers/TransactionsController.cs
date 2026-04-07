@@ -1,8 +1,6 @@
 using ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 

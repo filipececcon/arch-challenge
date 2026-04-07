@@ -1,9 +1,3 @@
-using ArchChallenge.CashFlow.Application.Common.Notifications;
-using ArchChallenge.CashFlow.Domain.Events;
-using MassTransit;
-using MediatR;
-using Microsoft.Extensions.Logging;
-
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Handlers;
 
 /// <summary>

@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 namespace ArchChallenge.CashFlow.Domain.Shared.Specifications;
 
 public interface ISpecification<T>

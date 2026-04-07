@@ -1,5 +1,3 @@
-using MediatR;
-
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
 
 public record ListTransactionsQuery : IRequest<IReadOnlyList<TransactionDto>>;

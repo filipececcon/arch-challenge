@@ -1,4 +1,3 @@
-using ArchChallenge.CashFlow.Api.Middlewares;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n;
 
 namespace ArchChallenge.CashFlow.Api.Extensions;

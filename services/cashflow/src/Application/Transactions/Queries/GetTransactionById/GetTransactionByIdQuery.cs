@@ -1,5 +1,4 @@
 using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
-using MediatR;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 

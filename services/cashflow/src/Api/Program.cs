@@ -1,8 +1,4 @@
-using ArchChallenge.CashFlow.Api.Extensions;
-using ArchChallenge.CashFlow.Api.Middlewares;
-using ArchChallenge.CashFlow.Application;
-using ArchChallenge.CashFlow.Data;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.DependencyInjection;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 

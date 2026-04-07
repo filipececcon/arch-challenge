@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;
-using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
 using ArchChallenge.CashFlow.Domain.Enums;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;

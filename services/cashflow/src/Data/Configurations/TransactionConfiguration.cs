@@ -1,9 +1,7 @@
 using ArchChallenge.CashFlow.Domain.Entities;
 using ArchChallenge.CashFlow.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace ArchChallenge.CashFlow.Data.Configurations;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Configurations;
 
 public class TransactionConfiguration : EntityConfiguration<Transaction>
 {

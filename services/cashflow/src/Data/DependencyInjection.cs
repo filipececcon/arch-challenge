@@ -1,12 +1,8 @@
-using ArchChallenge.CashFlow.Data.Context;
-using ArchChallenge.CashFlow.Data.Repositories;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using ArchChallenge.CashFlow.Infrastructure.Data.Repositories;
+using ArchChallenge.CashFlow.Infrastructure.Data.Transactions;
+using ArchChallenge.CashFlow.Infrastructure.Data.Workers;
 
-namespace ArchChallenge.CashFlow.Data;
+namespace ArchChallenge.CashFlow.Infrastructure.Data;
 
 public static class DependencyInjection
 {
@@ -18,6 +14,16 @@ public static class DependencyInjection
         services.AddScoped(typeof(IReadRepository<>), typeof(ReadRepository<>));
         services.AddScoped(typeof(IWriteRepository<>), typeof(WriteRepository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        services.AddScoped<IOutboxRepository, OutboxRepository>();
+
+        var mongoConnectionString = configuration.GetConnectionString("MongoConnection");
+        var mongoDatabaseName     = configuration["MongoDB:Database"];
+        services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoConnectionString));
+        services.AddSingleton<IMongoDatabase>(sp =>
+            sp.GetRequiredService<IMongoClient>().GetDatabase(mongoDatabaseName));
+
+        services.AddHostedService<OutboxWorkerService>();
 
         return services;
     }

@@ -1,6 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using MediatR;
-
 namespace ArchChallenge.CashFlow.Application.Common.Notifications;
 
 /// <summary>

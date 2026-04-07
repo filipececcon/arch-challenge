@@ -1,5 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-
 namespace ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 
 public interface IWriteRepository<T> where T : Entity, IAggregateRoot

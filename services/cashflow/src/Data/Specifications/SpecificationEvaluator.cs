@@ -1,8 +1,6 @@
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
 using ArchChallenge.CashFlow.Domain.Shared.Specifications;
-using Microsoft.EntityFrameworkCore;
 
-namespace ArchChallenge.CashFlow.Data.Specifications;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Specifications;
 
 internal static class SpecificationEvaluator<T> where T : Entity
 {

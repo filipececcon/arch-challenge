@@ -1,6 +1,4 @@
-using FluentValidation;
 using Flunt.Notifications;
-using MediatR;
 
 namespace ArchChallenge.CashFlow.Application.Common.Behaviors;
 

@@ -1,12 +1,18 @@
 using ArchChallenge.CashFlow.Domain.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using Microsoft.EntityFrameworkCore;
 
-namespace ArchChallenge.CashFlow.Data.Context;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Contexts;
 
 public class CashFlowDbContext(DbContextOptions<CashFlowDbContext> options) : DbContext(options)
 {
-    public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<Transaction>  Transactions => Set<Transaction>();
+
+    /// <summary>
+    /// Tabela do Transactional Outbox Pattern.
+    /// Eventos são inseridos aqui na mesma transação que a entidade principal,
+    /// garantindo atomicidade. O <c>OutboxWorkerService</c> os sincroniza
+    /// com o MongoDB de forma assíncrona.
+    /// </summary>
+    public DbSet<OutboxEvent>  OutboxEvents  => Set<OutboxEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,5 +1,3 @@
-using Flunt.Notifications;
-
 namespace ArchChallenge.CashFlow.Domain.Shared.Entities;
 
 public abstract class Entity : Notifiable<Notification>

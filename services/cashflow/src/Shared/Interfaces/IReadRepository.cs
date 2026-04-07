@@ -1,6 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Specifications;
-
 namespace ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 
 public interface IReadRepository<T> where T : Entity

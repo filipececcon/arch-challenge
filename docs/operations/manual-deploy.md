@@ -86,7 +86,7 @@ Na raiz do repositório, um único `docker compose up` sobe **todos** os serviç
    npm run dev
    ```
 
-   Por defeito o Angular serve em **http://localhost:4200** (alinhar redirect URIs no Keycloak se alterar a porta).
+   Por padrão o Angular serve em **http://localhost:4200** (alinhar redirect URIs no Keycloak se alterar a porta).
 
 5. **Realm e utilizadores de teste**
 

@@ -3,6 +3,7 @@ using ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransacti
 using ArchChallenge.CashFlow.Domain.Entities;
 using ArchChallenge.CashFlow.Domain.Enums;
 using ArchChallenge.CashFlow.Domain.Events;
+using ArchChallenge.CashFlow.Domain.Interfaces;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using FluentAssertions;
 using MediatR;
@@ -13,6 +14,7 @@ namespace ArchChallenge.CashFlow.Tests.Unit.Application;
 public class RegisterTransactionHandlerTests
 {
     private readonly IWriteRepository<Transaction> _repository;
+    private readonly IOutboxRepository _outboxRepository;
     private readonly IPublisher _publisher;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITransaction _transaction;
@@ -21,11 +23,12 @@ public class RegisterTransactionHandlerTests
     public RegisterTransactionHandlerTests()
     {
         _repository = Substitute.For<IWriteRepository<Transaction>>();
+        _outboxRepository = Substitute.For<IOutboxRepository>();
         _publisher = Substitute.For<IPublisher>();
         _transaction = Substitute.For<ITransaction>();
         _unitOfWork = Substitute.For<IUnitOfWork>();
         _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(_transaction);
-        _handler = new RegisterTransactionHandler(_repository, _publisher, _unitOfWork);
+        _handler = new RegisterTransactionHandler(_repository, _outboxRepository, _publisher, _unitOfWork);
     }
 
     [Fact]

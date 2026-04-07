@@ -1,9 +1,4 @@
-using ArchChallenge.CashFlow.Data.Context;
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using Microsoft.EntityFrameworkCore;
-
-namespace ArchChallenge.CashFlow.Data.Repositories;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Repositories;
 
 public class WriteRepository<T>(CashFlowDbContext context) : IWriteRepository<T>
     where T : Entity, IAggregateRoot
