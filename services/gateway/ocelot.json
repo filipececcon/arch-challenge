@@ -1,0 +1,63 @@
+{
+  "Routes": [
+    {
+      "SwaggerKey": "cashflow",
+      "UpstreamPathTemplate": "/cashflow/v1/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+      "DownstreamPathTemplate": "/api/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "cashflow-api", "Port": 8080 }
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer",
+        "AllowedScopes": []
+      },
+      "RouteClaimsRequirement": {
+        "roles": "comerciante,admin"
+      }
+    },
+    {
+      "SwaggerKey": "dashboard",
+      "UpstreamPathTemplate": "/dashboard/v1/{everything}",
+      "UpstreamHttpMethod": [ "GET" ],
+      "DownstreamPathTemplate": "/api/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "dashboard-api", "Port": 8080 }
+      ],
+      "AuthenticationOptions": {
+        "AuthenticationProviderKey": "Bearer",
+        "AllowedScopes": []
+      },
+      "RouteClaimsRequirement": {
+        "roles": "gestor,admin"
+      }
+    }
+  ],
+  "SwaggerEndPoints": [
+    {
+      "Key": "cashflow",
+      "Config": [
+        {
+          "Name": "CashFlow API",
+          "Version": "v1",
+          "Url": "http://cashflow-api:8080/swagger/v1/swagger.json"
+        }
+      ]
+    },
+    {
+      "Key": "dashboard",
+      "Config": [
+        {
+          "Name": "Dashboard API",
+          "Version": "v1",
+          "Url": "http://dashboard-api:8080/swagger/v1/swagger.json"
+        }
+      ]
+    }
+  ],
+  "GlobalConfiguration": {
+    "BaseUrl": "http://localhost:5000"
+  }
+}

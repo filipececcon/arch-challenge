@@ -6,32 +6,7 @@ Este documento descreve a estratégia de observabilidade adotada para o sistema 
 
 ## Visão Geral
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          APLICAÇÕES                                  │
-│      [CashFlow API]   [Dashboard API]   [API Gateway (Ocelot)]      │
-│           │                  │                    │                  │
-│      Serilog → stdout (JSON estruturado)                            │
-│      Elastic APM Agent (traces automáticos)                         │
-│      prometheus-net (endpoint /metrics)                             │
-└──────────────┬──────────────────────────────┬────────────────────────┘
-               │ LOGS                          │ MÉTRICAS
-               ▼                               ▼
-    ┌─────────────────────┐         ┌──────────────────────┐
-    │     Fluent Bit      │         │      Prometheus       │
-    │  (ingestor de logs) │         │   (scrape /metrics)   │
-    └──────────┬──────────┘         └──────────┬────────────┘
-               │                               │
-               ▼                               ▼
-    ┌─────────────────────┐         ┌──────────────────────┐
-    │    Elasticsearch    │         │       Grafana         │
-    │    Elastic APM      │◄────────┤  Dashboards + Alertas │
-    └──────────┬──────────┘         └──────────────────────┘
-               │
-               ▼
-           [Kibana]
-       Logs + APM Traces
-```
+O diagrama de arquitetura (Mermaid) está em [`diagrams/observability-overview.mmd`](./diagrams/observability-overview.mmd). Abra o ficheiro no IDE com extensão Mermaid ou exporte para SVG/PNG a partir do [Mermaid Live Editor](https://mermaid.live/).
 
 ---
 
@@ -44,6 +19,56 @@ As aplicações escrevem logs exclusivamente em `stdout` no formato JSON estrutu
 > Diagrama de sequência do pipeline completo: [`diagrams/log-pipeline.mmd`](./diagrams/log-pipeline.mmd)
 
 > Decisão documentada em: [ADR-011 — Fluent Bit como Ingestor de Logs](../decisions/ADR-011-fluent-bit-ingestor-de-logs.md)
+
+### Fluent Bit: é um container “ligado” ao stdout do CashFlow?
+
+**Não no sentido de um pipe direto** (o Fluent Bit não acopla ao processo da API nem lê o seu `stdout` como um `|` no shell).
+
+O fluxo real é:
+
+1. **CashFlow (e outros serviços)** escrevem em **stdout** via Serilog.
+2. O **Docker Engine** captura esse stream e **persiste** em ficheiros no host (um ficheiro JSON por container, normalmente sob `/var/lib/docker/containers/<id>/<id>-json.log`). Cada linha desse ficheiro é um envelope JSON do Docker com um campo `log` que contém a linha que a aplicação imprimiu.
+3. O **Fluent Bit** corre noutro **container**, com a sua própria imagem (`fluent/fluent-bit`), e obtém esses eventos de uma de duas formas típicas:
+   - **INPUT `tail`** — seguir os ficheiros `*-json.log` (requer montar o diretório de logs dos containers no serviço do Fluent Bit; em **Linux** é direto; no **Docker Desktop (macOS/Windows)** o caminho do host não expõe o mesmo que em Linux — muitas equipas preferem o INPUT `docker` com *socket*).
+   - **INPUT `docker`** (ou equivalente via API) — montar **`/var/run/docker.sock`** e filtrar por **nome do container**, **label** ou **ID**, para receber o mesmo stream que o Docker já agregou a partir do stdout.
+
+Ou seja: o Fluent Bit **não** “aponta” para o container do CashFlow como um endereço de rede; ele **lê o que o Docker já registou** a partir do stdout (ficheiros ou API), processa, enriquece e envia ao Elasticsearch.
+
+### Provisionamento no Docker Compose (esboço)
+
+O serviço do Fluent Bit no `docker-compose` costuma ser definido assim (conceitualmente):
+
+| Peça | Função |
+|------|--------|
+| **Imagem** | `fluent/fluent-bit` (tag estável, ex. `3.x`) |
+| **Ficheiros de configuração** | Montados por volume, ex. `./infra/fluent-bit/fluent-bit.conf` (e `parsers.conf` se usar parser JSON do campo `log`) |
+| **Volume de buffer** | Volume nomeado mapeado para o caminho usado em `storage.path` / buffer em disco (resiliência quando o ES cai) |
+| **Acesso aos logs** | `tail`: bind mount de `/var/lib/docker/containers` **ou** `docker.sock` para input baseado na API Docker |
+| **Rede** | Mesma rede Docker que o Elasticsearch (`OUTPUT` para `http://elasticsearch:9200` com utilizador `elastic` e respetiva palavra-passe) |
+| **Dependência** | `depends_on` com Elasticsearch **healthy** |
+
+Exemplo mínimo de `fluent-bit.conf` (ilustrativo — ajustar *inputs* e filtros ao modo escolhido, *tail* vs *docker*):
+
+```ini
+[SERVICE]
+    Flush         5
+    Log_Level     info
+    storage.path  /var/log/flb-storage/
+    storage.sync  normal
+
+# Exemplo: saída para Elasticsearch (credenciais alinhadas ao stack local)
+[OUTPUT]
+    Name            es
+    Match           *
+    Host            elasticsearch
+    Port            9200
+    HTTP_User       elastic
+    HTTP_Passwd     changeme
+    tls             Off
+    Suppress_Type_Name On
+```
+
+Os blocos **INPUT** e **FILTER** (parser `docker`, extrair JSON do campo `log`, rotear para índices `cashflow-logs-*`, etc.) dependem de se usar *tail* nos ficheiros do Docker ou o plugin **docker** com *socket*; ver [Fluent Bit — Inputs](https://docs.fluentbit.io/manual/pipeline/inputs).
 
 ### Por que stdout e não arquivo?
 
@@ -81,7 +106,7 @@ O Fluent Bit adiciona automaticamente aos logs os seguintes metadados Docker, se
 | Campo | Valor exemplo |
 |---|---|
 | `container_name` | `cashflow-api` |
-| `container_image` | `cashflow/backend:latest` |
+| `container_image` | `ghcr.io/SEU_ORG/arch-challenge-cashflow-api:1.0.0` |
 | `docker.container_id` | `abc123...` |
 
 ### Índices no Elasticsearch
@@ -172,26 +197,79 @@ Os alertas são roteados via **Alertmanager** para os canais configurados (Slack
 
 ## Componentes de infraestrutura
 
-| Componente | Imagem Docker | Porta | Responsabilidade |
-|---|---|---|---|
-| Elasticsearch | `elasticsearch:8.x` | 9200 | Storage de logs e traces |
-| Kibana | `kibana:8.x` | 5601 | Visualização de logs e APM |
-| Elastic APM Server | `elastic/apm-server:8.x` | 8200 | Recepção de traces |
-| Fluent Bit | `fluent/fluent-bit:3.x` | — | Coleta e ingestão de logs |
-| Prometheus | `prom/prometheus:latest` | 9090 | Coleta e storage de métricas |
-| Grafana | `grafana/grafana:latest` | 3000 | Dashboards e alertas |
+| Componente | Imagem (Compose) | Porta (host) | Responsabilidade |
+|---|---|---:|---|
+| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.15.3` | 9200 | Storage de logs e dados do APM |
+| Kibana | `docker.elastic.co/kibana/kibana:8.15.3` | 5601 | UI (Discover, APM, dashboards) |
+| Elastic APM Server | `docker.elastic.co/apm/apm-server:8.15.3` | 8200 | Ingestão de traces dos agentes |
+| Fluent Bit | `fluent/fluent-bit:3.x` | — | Coleta e ingestão de logs (planejado; ver ADR-011) |
+| Prometheus | `prom/prometheus:v2.53.2` | 9090 | Scrape e armazenamento de métricas |
+| Grafana | `grafana/grafana:11.3.0` | 3000 | Dashboards e alertas (datasource Prometheus provisionado) |
 
 ---
 
-## Acessos locais (desenvolvimento)
+## Docker Compose — observabilidade
+
+Os serviços **Elasticsearch**, **Kibana**, **APM Server**, **Prometheus** e **Grafana** estão definidos no `docker-compose.yml` na raiz do repositório. Volumes nomeados persistem dados: `elasticsearch_data`, `prometheus_data`, `grafana_data`.
+
+### Endereços na máquina host (desenvolvimento)
+
+| Serviço | URL | Uso |
+|---|---|---|
+| Elasticsearch | http://localhost:9200 | API REST, health |
+| Kibana | http://localhost:5601 | Interface web |
+| Elastic APM Server | http://localhost:8200 | Endpoint dos agentes APM (ingestão) |
+| Prometheus | http://localhost:9090 | UI e API de consulta |
+| Grafana | http://localhost:3000 | Interface web |
+
+### Endereços entre containers (rede `cashflow-network`)
+
+Use estes hostnames nas variáveis de ambiente das aplicações quando rodarem **no mesmo Compose**:
+
+| Serviço | Base URL interna |
+|---|---|
+| Elasticsearch | `http://elasticsearch:9200` |
+| Kibana | `http://kibana:5601` |
+| APM Server | `http://apm-server:8200` |
+| Prometheus | `http://prometheus:9090` |
+| Grafana | `http://grafana:3000` |
+
+### Credenciais e segurança (apenas desenvolvimento local)
+
+> **Atenção:** usuários e senhas abaixo são **somente para ambiente local**. Em produção, use segredos gerenciados, senhas fortes e TLS nas APIs.
+
+| Serviço | Usuário | Senha | Observação |
+|---|---|---|---|
+| Elasticsearch (`elastic`) | `elastic` | `changeme` | Definida por `ELASTIC_PASSWORD` no Compose |
+| Kibana (login na UI) | `elastic` | `changeme` | Mesmo superusuário do cluster |
+| Grafana | `admin` | `admin` | `GF_SECURITY_ADMIN_*` no Compose |
+| Prometheus | — | — | Sem autenticação por padrão nesta stack |
+| Elastic APM Server | — | — | Sem `secret_token` neste Compose; para restringir ingestão, configure `apm-server` e os agentes com o mesmo token |
+
+A configuração do **APM Server** em desenvolvimento está em [`infra/apm-server/apm-server.yml`](../../infra/apm-server/apm-server.yml) e usa o utilizador `elastic` com a mesma senha `changeme` para escrita no Elasticsearch.
+
+O **Elasticsearch** está com **HTTP sem TLS** (`xpack.security.http.ssl.enabled=false`) para simplificar o Compose local; o utilizador `elastic` continua protegido por palavra-passe. Em produção, ative TLS e políticas de rede adequadas.
+
+### Prometheus e Grafana
+
+- Ficheiro de configuração do Prometheus: [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml) (targets: `cashflow-api`, `dashboard-api`, `gateway` na porta interna **8080**, path `/metrics`).
+- Provisionamento do datasource no Grafana: [`infra/grafana/provisioning/datasources/datasources.yml`](../../infra/grafana/provisioning/datasources/datasources.yml) (Prometheus em `http://prometheus:9090`).
+
+Enquanto os serviços .NET não expuserem `/metrics`, os targets podem aparecer como **DOWN** no Prometheus; isso é esperado até a instrumentação estar ligada.
+
+---
+
+## Acessos locais (desenvolvimento) — resumo rápido
 
 | Ferramenta | URL | Credenciais |
 |---|---|---|
-| Kibana | http://localhost:5601 | elastic / changeme |
-| Grafana | http://localhost:3000 | admin / admin |
+| Kibana | http://localhost:5601 | `elastic` / `changeme` |
+| Grafana | http://localhost:3000 | `admin` / `admin` |
 | Prometheus | http://localhost:9090 | — |
-| RabbitMQ Management | http://localhost:15672 | rabbit / rabbit |
-| Elasticsearch | http://localhost:9200 | elastic / changeme |
+| Elasticsearch | http://localhost:9200 | `elastic` / `changeme` |
+| Elastic APM Server | http://localhost:8200 | ingestão (sem credencial neste Compose) |
+| RabbitMQ Management | http://localhost:15672 | `rabbit` / `rabbit` |
+| Keycloak | http://localhost:8080 | `admin` / `admin` (consola admin) |
 
 ---
 

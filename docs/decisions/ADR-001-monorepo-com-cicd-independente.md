@@ -28,16 +28,18 @@ Adotar **monorepo único** com **pipelines de CI/CD independentes por serviço**
 arch-challenge/
 ├── services/
 │   ├── gateway/                ← API Gateway (Ocelot)
-│   ├── cashflow/
-│   │   └── backend/            ← API ASP.NET Core
-│   ├── dashboard/
-│   │   └── backend/            ← API ASP.NET Core
+│   ├── cashflow/               ← API ASP.NET Core (CashFlow)
+│   ├── dashboard/              ← API ASP.NET Core (Dashboard)
 │   └── frontend/               ← SPA Angular unificada (ver ADR-010)
 │       └── src/app/
-│           ├── cashflow/       ← Feature module lazy-loaded
-│           └── dashboard/      ← Feature module lazy-loaded
-├── shared/
-├── infra/
+│           ├── core/
+│           └── features/
+│               ├── cashflow/   ← Feature module lazy-loaded
+│               └── dashboard/  ← Feature module lazy-loaded
+├── infra/                      ← K8s (Kustomize), init Postgres, realm Keycloak
+│   ├── k8s/
+│   ├── postgres/
+│   └── keycloak/
 ├── docs/
 │   ├── architecture/
 │   ├── security/
@@ -85,7 +87,7 @@ on:
 
 **Positivas:**
 - Repositório público único facilita a avaliação do desafio
-- Compartilhamento de contratos e schemas de eventos na pasta `shared/`
+- Contratos de mensagens documentados nos ADRs e mantidos alinhados entre produtor (CashFlow) e consumidor (Dashboard) no código de cada serviço
 - ADRs, diagramas e documentação centralizados
 - Deploy independente garantido via path filters no CI/CD
 

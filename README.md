@@ -2,6 +2,10 @@
 
 Sistema de controle de fluxo de caixa para comerciantes, com registro de lançamentos (débitos e créditos) e consolidado diário.
 
+## Manual de deploy
+
+**[→ Manual passo a passo: ambiente local e produção (Kubernetes)](./docs/operations/manual-deploy.md)** — único ponto de entrada para subir o projeto no desenvolvimento (Docker Compose ou serviços na máquina) e no ambiente produtivo.
+
 ---
 
 ## Visão Geral
@@ -37,19 +41,16 @@ Os serviços se comunicam de forma **assíncrona via RabbitMQ**, garantindo que 
 arch-challenge/
 ├── services/
 │   ├── gateway/                  ← API Gateway (Ocelot) — ponto único de entrada
-│   ├── cashflow/
-│   │   └── backend/              ← API ASP.NET Core
-│   ├── dashboard/
-│   │   └── backend/              ← API ASP.NET Core
+│   ├── cashflow/                 ← API ASP.NET Core (CashFlow)
+│   ├── dashboard/                ← API ASP.NET Core (Dashboard)
 │   └── frontend/                 ← SPA Angular unificada (ver ADR-010)
 │       └── src/app/
 │           ├── core/             ← Auth, guards, interceptors
-│           ├── shared/           ← Componentes reutilizáveis
-│           ├── cashflow/         ← Feature module lazy-loaded (lançamentos)
-│           └── dashboard/        ← Feature module lazy-loaded (consolidado)
-├── shared/
-│   └── contracts/                ← Contratos de eventos entre serviços
-├── infra/                        ← IaC e configurações de infraestrutura
+│           └── features/         ← Módulos por domínio (ex.: cashflow, dashboard)
+├── infra/                        ← Plataforma: K8s (Kustomize), Postgres, Keycloak
+│   ├── k8s/                      ← Manifests e overlay de produção
+│   ├── postgres/                 ← init.sql (Compose / referência DB)
+│   └── keycloak/                 ← Realm export (dev)
 ├── docs/
 │   ├── architecture/             ← Diagramas C4 e visão arquitetural
 │   ├── security/                 ← Documentação de segurança
@@ -80,16 +81,23 @@ Isso irá subir:
 - RabbitMQ (porta 5672, Management UI em http://localhost:15672)
 - Keycloak (porta 8080 — http://localhost:8080)
 
-### 2. Configurar o Keycloak
+### 2. Keycloak (realm `cashflow`)
 
-Acesse http://localhost:8080 com as credenciais padrão (`admin` / `admin`) e:
+Na primeira subida do container, o Keycloak importa o realm definido em [`infra/keycloak/cashflow-realm.json`](./infra/keycloak/cashflow-realm.json) (alinhado a [docs/security/authorization.md](./docs/security/authorization.md) e [ADR-008](./docs/decisions/ADR-008-autenticacao-autorizacao-keycloak.md)):
 
-1. Crie o realm `cashflow`
-2. Crie os clients `cashflow-frontend` e `dashboard-frontend` (public, PKCE)
-3. Crie os roles `comerciante`, `gestor` e `admin`
-4. Crie um usuário de teste e atribua um role
+- **Admin master:** http://localhost:8080 — `admin` / `admin` (apenas desenvolvimento)
+- **Realm:** `cashflow` — clients `cashflow-frontend`, `dashboard-frontend` (públicos, PKCE), `cashflow-api`, `dashboard-api` (confidenciais; secrets de dev no JSON)
+- **Mappers de audience** nos frontends para incluir `cashflow-api` e `dashboard-api` no JWT (como em [docs/security/authentication.md](./docs/security/authentication.md))
 
-> Em breve: script de configuração automática via Keycloak Import.
+Usuários de teste (senha **`password`** em todos):
+
+| Usuário | Roles |
+|---------|--------|
+| `joao.comerciante` | `comerciante` |
+| `maria.gestor` | `gestor` |
+| `admin.cashflow` | `admin` (compõe `comerciante` + `gestor`) |
+
+Se você já tinha um banco Keycloak antigo no volume do Postgres, o import pode não reaplicar o arquivo. Para forçar um realm novo: remova o volume do Postgres (`docker compose down -v`) e suba de novo (apaga também os dados das APIs).
 
 ### 3. Executar o API Gateway
 
@@ -105,7 +113,7 @@ Swagger unificado em: http://localhost:5000/swagger
 ### 4. Executar o backend do CashFlow
 
 ```bash
-cd services/cashflow/backend
+cd services/cashflow
 dotnet restore
 dotnet run
 ```
@@ -115,7 +123,7 @@ API disponível em: http://localhost:5001
 ### 5. Executar o backend do Dashboard
 
 ```bash
-cd services/dashboard/backend
+cd services/dashboard
 dotnet restore
 dotnet run
 ```
@@ -144,7 +152,10 @@ Disponível em: http://localhost:4200
 | [Arquitetura](./docs/architecture/README.md) | Diagramas C4 — Context, Container, Component e Code |
 | [Segurança](./docs/security/README.md) | Estratégia de segurança completa — autenticação, RBAC, proteção de APIs e dados |
 | [Decisões (ADRs)](./docs/decisions/) | Registro de todas as decisões arquiteturais |
-| [Operação](./docs/operations/observability.md) | Estratégia de observabilidade — logs, traces e métricas |
+| [Operação — observabilidade](./docs/operations/observability.md) | Logs, traces e métricas |
+| [Operação — manual de deploy](./docs/operations/manual-deploy.md) | Passo a passo: ambiente local e produção (Kubernetes) |
+| [Operação — Kubernetes](./docs/operations/kubernetes.md) | Deploy em cluster (Kustomize), dependências e pós-deploy |
+| [Infraestrutura](./infra/README.md) | Pasta `infra/`: estrutura, capacidades (K8s, Postgres, Keycloak) e ligação ao Compose |
 
 ### ADRs
 
@@ -177,10 +188,10 @@ Disponível em: http://localhost:4200
 
 ```bash
 # Testes unitários — CashFlow
-cd services/cashflow/backend
+cd services/cashflow
 dotnet test
 
 # Testes unitários — Dashboard
-cd services/dashboard/backend
+cd services/dashboard
 dotnet test
 ```

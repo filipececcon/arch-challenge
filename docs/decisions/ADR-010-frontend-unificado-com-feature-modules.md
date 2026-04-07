@@ -30,15 +30,15 @@ services/
     ├── src/
     │   └── app/
     │       ├── core/                  ← Singleton: auth, guards, interceptors, http
-    │       ├── shared/                ← Componentes, pipes e diretivas reutilizáveis
-    │       ├── cashflow/              ← Feature module — Bounded Context: Lançamentos
-    │       │   ├── pages/
-    │       │   ├── components/
-    │       │   └── services/
-    │       └── dashboard/             ← Feature module — Bounded Context: Consolidado
-    │           ├── pages/
-    │           ├── components/
-    │           └── services/
+    │       └── features/
+    │           ├── cashflow/        ← Feature module — Bounded Context: Lançamentos
+    │           │   ├── pages/
+    │           │   ├── components/
+    │           │   └── services/
+    │           └── dashboard/       ← Feature module — Bounded Context: Consolidado
+    │               ├── pages/
+    │               ├── components/
+    │               └── services/
     ├── environments/
     └── angular.json
 ```
@@ -48,7 +48,7 @@ services/
 - Cada feature module carregado via **lazy loading** (`loadChildren`) — isolamento de carregamento sem MFE
 - Serviços de domínio providos com `providedIn: 'any'` para escopo por feature
 - `core/` contém os serviços globais, configurados uma única vez no bootstrap
-- `shared/` expõe apenas componentes verdadeiramente reutilizáveis entre os dois domínios
+- Componentes verdadeiramente reutilizáveis entre os dois domínios ficam em `core/` ou em um módulo de UI compartilhada dentro de `src/app/` — não há pasta `shared/` na raiz do repositório
 
 ---
 

@@ -1,0 +1,274 @@
+{
+  "id": "f4c7c2a1-0001-4000-8000-000000000001",
+  "realm": "cashflow",
+  "displayName": "Sistema de Fluxo de Caixa",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "refreshTokenMaxReuse": 0,
+  "roles": {
+    "realm": [
+      {
+        "id": "f4c7c2a1-1001-4000-8000-000000000001",
+        "name": "comerciante",
+        "description": "Registra e visualiza lançamentos",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "f4c7c2a1-0001-4000-8000-000000000001"
+      },
+      {
+        "id": "f4c7c2a1-1001-4000-8000-000000000002",
+        "name": "gestor",
+        "description": "Visualiza consolidado e relatórios",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "f4c7c2a1-0001-4000-8000-000000000001"
+      },
+      {
+        "id": "f4c7c2a1-1001-4000-8000-000000000003",
+        "name": "admin",
+        "description": "Acesso completo (herda comerciante e gestor)",
+        "composite": true,
+        "composites": {
+          "realm": ["comerciante", "gestor"],
+          "client": {}
+        },
+        "clientRole": false,
+        "containerId": "f4c7c2a1-0001-4000-8000-000000000001"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "id": "f4c7c2a1-2001-4000-8000-000000000001",
+      "clientId": "cashflow-frontend",
+      "name": "CashFlow / Dashboard — SPA (PKCE)",
+      "description": "Cliente público — Authorization Code + PKCE (ver docs/security/authorization.md)",
+      "rootUrl": "http://localhost:4200",
+      "baseUrl": "/",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": ["http://localhost:4200/*"],
+      "webOrigins": ["http://localhost:4200"],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:4200/*",
+        "pkce.code.challenge.method": "S256"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "f4c7c2a1-2101-4000-8000-000000000001",
+          "name": "audience-cashflow-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "cashflow-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "id": "f4c7c2a1-2101-4000-8000-000000000002",
+          "name": "audience-dashboard-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "dashboard-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "f4c7c2a1-2001-4000-8000-000000000002",
+      "clientId": "dashboard-frontend",
+      "name": "Dashboard — SPA (PKCE)",
+      "description": "Cliente público alternativo — ADR-008 (SPA unificada pode usar só cashflow-frontend)",
+      "rootUrl": "http://localhost:4200",
+      "baseUrl": "/",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": ["http://localhost:4200/*"],
+      "webOrigins": ["http://localhost:4200"],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:4200/*",
+        "pkce.code.challenge.method": "S256"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "f4c7c2a1-2101-4000-8000-000000000011",
+          "name": "audience-cashflow-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "cashflow-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "id": "f4c7c2a1-2101-4000-8000-000000000012",
+          "name": "audience-dashboard-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "dashboard-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "f4c7c2a1-2001-4000-8000-000000000003",
+      "clientId": "cashflow-api",
+      "name": "CashFlow API",
+      "description": "Audience JWT — CashFlow API / Client Credentials M2M (docs/security/authorization.md)",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "cashflow-api-dev-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {},
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": []
+    },
+    {
+      "id": "f4c7c2a1-2001-4000-8000-000000000004",
+      "clientId": "dashboard-api",
+      "name": "Dashboard API",
+      "description": "Audience JWT — Dashboard API / Client Credentials M2M",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dashboard-api-dev-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {},
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": []
+    }
+  ],
+  "users": [
+    {
+      "id": "f4c7c2a1-3001-4000-8000-000000000001",
+      "username": "joao.comerciante",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "João",
+      "lastName": "Comerciante",
+      "email": "joao@empresa.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["comerciante"],
+      "requiredActions": [],
+      "groups": []
+    },
+    {
+      "id": "f4c7c2a1-3001-4000-8000-000000000002",
+      "username": "maria.gestor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Maria",
+      "lastName": "Gestor",
+      "email": "maria@empresa.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["gestor"],
+      "requiredActions": [],
+      "groups": []
+    },
+    {
+      "id": "f4c7c2a1-3001-4000-8000-000000000003",
+      "username": "admin.cashflow",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Sistema",
+      "email": "admin@empresa.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"],
+      "requiredActions": [],
+      "groups": []
+    }
+  ]
+}

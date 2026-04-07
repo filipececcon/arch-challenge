@@ -48,6 +48,7 @@ lcov.info
 .env
 .env.*
 !.env.example
+infra/k8s/overlays/production/credentials.env
 *.pem
 *.key
 *.pfx

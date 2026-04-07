@@ -196,6 +196,8 @@ As APIs downstream não revalidam autorização. Isso é um trade-off documentad
 
 ## Configuração no Keycloak
 
+Em ambiente local com Docker Compose, o realm `cashflow` é importado automaticamente a partir de [`infra/keycloak/cashflow-realm.json`](../../infra/keycloak/cashflow-realm.json) na primeira inicialização do Keycloak (ver `README.md` na raiz do repositório).
+
 ### Realm: `cashflow`
 
 ```

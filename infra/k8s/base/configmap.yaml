@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arch-challenge-config
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+data:
+  # Ajuste o host público do Keycloak após definir Ingress/DNS (ver docs/operations/kubernetes.md)
+  KEYCLOAK_AUTHORITY: "http://keycloak.arch-challenge.svc.cluster.local:8080/realms/cashflow"
+  KEYCLOAK_AUDIENCE: "cashflow-api"
+  RABBITMQ_HOST: "rabbitmq.arch-challenge.svc.cluster.local"
+  RABBITMQ_USERNAME: "rabbit"
+  OTEL_SERVICE_NAME: "cashflow-api"
+  # ASPNETCORE_ENVIRONMENT definido no overlay production

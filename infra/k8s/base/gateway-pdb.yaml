@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway

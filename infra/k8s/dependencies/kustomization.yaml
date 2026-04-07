@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: arch-challenge
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: postgres-init-scripts
+    files:
+      - init.sql=files/init.sql
+  - name: keycloak-realm-import
+    files:
+      - cashflow-realm.json=files/cashflow-realm.json
+
+resources:
+  - postgres.yaml
+  - rabbitmq.yaml
+  - keycloak.yaml

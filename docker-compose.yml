@@ -54,7 +54,7 @@ services:
     image: quay.io/keycloak/keycloak:24.0
     container_name: cashflow-keycloak
     restart: unless-stopped
-    command: start-dev
+    command: start-dev --import-realm
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
@@ -66,9 +66,125 @@ services:
       KC_HTTP_ENABLED: true
     ports:
       - "8080:8080"
+    volumes:
+      - ./infra/keycloak/cashflow-realm.json:/opt/keycloak/data/import/cashflow-realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Elasticsearch — logs e dados do APM (Elastic Stack 8)
+  # ─────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: cashflow-elasticsearch
+    restart: unless-stopped
+    environment:
+      - node.name=es01
+      - cluster.name=cashflow-cluster
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:changeme http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=10s | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 20s
+      retries: 30
+      start_period: 90s
+
+  # ─────────────────────────────────────────────
+  # Kibana — UI (logs, Discover, APM, etc.)
+  # ─────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: cashflow-kibana
+    restart: unless-stopped
+    environment:
+      - SERVER_NAME=kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=none
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=cashflow-kibana-encrypted-saved-objects-key-32b-min
+      - XPACK_SECURITY_ENCRYPTIONKEY=cashflow-kibana-security-encryption-key-32-chars!!
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"level\":\"available\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  # ─────────────────────────────────────────────
+  # Elastic APM Server — ingestão de traces dos agentes
+  # ─────────────────────────────────────────────
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.3
+    container_name: cashflow-apm-server
+    restart: unless-stopped
+    volumes:
+      - ./infra/apm-server/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+    ports:
+      - "8200:8200"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Prometheus — métricas (scrape /metrics)
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    container_name: cashflow-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Grafana — dashboards (datasource Prometheus provisionado)
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: cashflow-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
     networks:
       - cashflow-network
 
@@ -77,8 +193,8 @@ services:
   # ─────────────────────────────────────────────
   cashflow-api:
     build:
-      context: ./services/cashflow/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/cashflow/Dockerfile
     container_name: cashflow-api
     restart: unless-stopped
     environment:
@@ -96,6 +212,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
       - cashflow-network
 
@@ -104,8 +222,8 @@ services:
   # ─────────────────────────────────────────────
   dashboard-api:
     build:
-      context: ./services/dashboard/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/dashboard/Dockerfile
     container_name: dashboard-api
     restart: unless-stopped
     environment:
@@ -123,12 +241,43 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # API Gateway — Ocelot (ASP.NET Core)
+  # ─────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: arch-gateway
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Gateway__UseLocalDownstreamHosts: "false"
+      Keycloak__Authority: http://keycloak:8080/realms/cashflow
+      GlobalConfiguration__BaseUrl: http://localhost:5000
+    ports:
+      - "5000:8080"
+    depends_on:
+      cashflow-api:
+        condition: service_started
+      dashboard-api:
+        condition: service_started
+      keycloak:
+        condition: service_started
     networks:
       - cashflow-network
 
 volumes:
   postgres_data:
   rabbitmq_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   cashflow-network:

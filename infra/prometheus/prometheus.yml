@@ -1,0 +1,32 @@
+# Prometheus — desenvolvimento local (docker compose)
+# Ajuste os targets quando os serviços expuserem /metrics (prometheus-net).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: cashflow-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["cashflow-api:8080"]
+        labels:
+          service: cashflow-api
+
+  - job_name: dashboard-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["dashboard-api:8080"]
+        labels:
+          service: dashboard-api
+
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gateway:8080"]
+        labels:
+          service: gateway

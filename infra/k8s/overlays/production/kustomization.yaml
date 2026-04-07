@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - ../../dependencies
+
+secretGenerator:
+  - name: arch-challenge-credentials
+    type: Opaque
+    envs:
+      - credentials.env
+
+images:
+  - name: cashflow-api
+    newName: ghcr.io/SEU_ORG/arch-challenge-cashflow-api
+    newTag: "1.0.0"
+  - name: gateway
+    newName: ghcr.io/SEU_ORG/arch-challenge-gateway
+    newTag: "1.0.0"
+
+replicas:
+  - name: gateway
+    count: 2
+
+patches:
+  - target:
+      kind: Deployment
+      name: cashflow-api
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: ASPNETCORE_ENVIRONMENT
+          value: Production
+  - target:
+      kind: Deployment
+      name: gateway
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: ASPNETCORE_ENVIRONMENT
+          value: Production

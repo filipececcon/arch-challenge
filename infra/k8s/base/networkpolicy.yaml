@@ -1,0 +1,56 @@
+# Política alinhada a docs/security — tráfego apenas de componentes esperados.
+# Requer CNI com suporte a NetworkPolicy (Calico, Cilium, etc.).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cashflow-api-isolation
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cashflow-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Gateway (e jobs de migração / operadores na mesma NS)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -30,16 +30,20 @@ Utilizar **ASP.NET Core** (C#) como framework para os backends de ambos os servi
 Cada backend seguirá a arquitetura em camadas com separação clara de responsabilidades:
 
 ```
-cashflow/backend/
+services/cashflow/
+├── ArchChallenge.CashFlow.sln
 ├── src/
-│   ├── CashFlow.Api/           ← Apresentação (Controllers, Middlewares)
-│   ├── CashFlow.Application/   ← Casos de uso, DTOs, interfaces
-│   ├── CashFlow.Domain/        ← Entidades, regras de negócio, eventos
-│   └── CashFlow.Infrastructure/← Repositórios, EF Core, RabbitMQ
+│   ├── Api/                    ← Apresentação (Controllers, Middlewares)
+│   ├── Application/            ← Casos de uso, DTOs, interfaces
+│   ├── Domain/                 ← Entidades, regras de negócio, eventos
+│   ├── Data/                   ← Repositórios, EF Core
+│   └── Messaging/              ← Consumidores/publicação RabbitMQ
 └── tests/
-    ├── CashFlow.UnitTests/
-    └── CashFlow.IntegrationTests/
+    ├── Unit/
+    └── Integration/
 ```
+
+(O serviço Dashboard segue o mesmo padrão em `services/dashboard/`, com solution `ArchChallenge.Dashboard.sln`.)
 
 ---
 

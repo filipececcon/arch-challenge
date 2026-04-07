@@ -34,15 +34,15 @@ services/frontend/
 ├── src/
 │   ├── app/
 │   │   ├── core/               ← Serviços singleton, guards, interceptors, auth
-│   │   ├── shared/             ← Componentes, pipes e diretivas reutilizáveis
-│   │   ├── cashflow/           ← Feature module lazy-loaded (lançamentos)
-│   │   │   ├── pages/
-│   │   │   ├── components/
-│   │   │   └── services/
-│   │   └── dashboard/          ← Feature module lazy-loaded (consolidado)
-│   │       ├── pages/
-│   │       ├── components/
-│   │       └── services/
+│   │   └── features/
+│   │       ├── cashflow/       ← Feature module lazy-loaded (lançamentos)
+│   │       │   ├── pages/
+│   │       │   ├── components/
+│   │       │   └── services/
+│   │       └── dashboard/      ← Feature module lazy-loaded (consolidado)
+│   │           ├── pages/
+│   │           ├── components/
+│   │           └── services/
 │   ├── environments/
 │   └── assets/
 └── angular.json

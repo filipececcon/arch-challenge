@@ -23,7 +23,7 @@ As principais opções consideradas foram:
 
 Utilizar **JSON** como formato de serialização das mensagens, sem a adoção de schema registry.
 
-O contrato dos eventos será documentado explicitamente nos ADRs e na pasta `shared/contracts/` do repositório, servindo como fonte de verdade para os times.
+O contrato dos eventos será documentado explicitamente nos ADRs e mantido alinhado entre o código que publica o evento (CashFlow) e o que consome (Dashboard), servindo como fonte de verdade para os times.
 
 ### Contrato documentado do evento principal
 
