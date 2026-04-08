@@ -1,3 +1,4 @@
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
 using ArchChallenge.CashFlow.Domain.Shared.Specifications;
 using ArchChallenge.CashFlow.Infrastructure.Data.Specifications;
 

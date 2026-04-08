@@ -1,4 +1,6 @@
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Handlers;
+using ArchChallenge.CashFlow.Application.Common.Interfaces;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Consumers;
 using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
@@ -8,8 +10,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddScoped<IEventBus, MassTransitEventBus>();
+
         services.AddMassTransit(x =>
         {
+            x.AddConsumer<ExecuteTransactionConsumer>();
+
             x.UsingRabbitMq((ctx, cfg) =>
             {
                 cfg.Host(configuration["RabbitMQ:Host"], "/", h =>
@@ -18,15 +24,22 @@ public static class DependencyInjection
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                cfg.Message<TransactionRegisteredEvent>(m => m.SetEntityName("cashflow.transaction.done"));
-                cfg.Publish<TransactionRegisteredEvent>(p => p.ExchangeType = ExchangeType.Direct);
+                // Exchange de entrada para criação de transações
+                cfg.Message<CreateTransactionMessage>(m => m.SetEntityName("cashflow.transaction.create"));
+                cfg.Publish<CreateTransactionMessage>(p => p.ExchangeType = ExchangeType.Direct);
+
+                // Fila consumida pelo ExecuteTransactionConsumer
+                cfg.ReceiveEndpoint("cashflow.transaction.create", e =>
+                {
+                    e.Bind("cashflow.transaction.create");
+                    e.ConfigureConsumer<ExecuteTransactionConsumer>(ctx);
+                });
+                
+                // Exchange de saída para downstream (dashboard, etc.)
+                cfg.Message<TransactionDoneEvent>(m => m.SetEntityName("cashflow.transaction.done"));
+                cfg.Publish<TransactionDoneEvent>(p => p.ExchangeType = ExchangeType.Topic);
             });
         });
-
-        // Registra os INotificationHandler do Messaging no pipeline do MediatR.
-        // Cada novo evento de domínio ganha um handler aqui sem alterar os command handlers.
-        services.AddMediatR(cfg =>
-            cfg.RegisterServicesFromAssembly(typeof(TransactionRegisteredEventHandler).Assembly));
 
         return services;
     }

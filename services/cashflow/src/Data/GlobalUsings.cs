@@ -5,7 +5,6 @@ global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Hosting;
 global using MongoDB.Driver;
 global using ArchChallenge.CashFlow.Infrastructure.Data.Contexts;
-global using ArchChallenge.CashFlow.Domain.Interfaces;
 global using ArchChallenge.CashFlow.Domain.Shared.Entities;
 global using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 global using ArchChallenge.CashFlow.Domain.Shared.Events;

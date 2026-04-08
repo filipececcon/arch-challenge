@@ -172,6 +172,9 @@ Disponível em: http://localhost:4200
 | [ADR-009](./docs/decisions/ADR-009-api-gateway-ocelot.md) | API Gateway com Ocelot | Aceito |
 | [ADR-010](./docs/decisions/ADR-010-frontend-unificado-com-feature-modules.md) | Frontend unificado com feature modules lazy-loaded | Aceito |
 | [ADR-011](./docs/decisions/ADR-011-fluent-bit-ingestor-de-logs.md) | Fluent Bit como ingestor de logs | Aceito |
+| [ADR-012](./docs/decisions/ADR-012-specification-pattern-read-repository.md) | Specification Pattern no ReadRepository | Aceito |
+| [ADR-013](./docs/decisions/ADR-013-prometheus-exporter-pattern-metricas-infraestrutura.md) | Prometheus Exporter Pattern para métricas de infraestrutura | Aceito |
+| [ADR-014](./docs/decisions/ADR-014-grafana-alerting-sistema-centralizado-alertas.md) | Grafana Alerting como sistema centralizado de alertas | Aceito |
 
 ---
 

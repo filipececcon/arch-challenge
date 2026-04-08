@@ -208,6 +208,82 @@ services:
       - cashflow-network
 
   # ─────────────────────────────────────────────
+  # postgres-exporter — métricas do PostgreSQL para o Prometheus
+  # Acesso: http://localhost:9187/metrics
+  # ─────────────────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cashflow-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # mongodb-exporter — métricas do MongoDB para o Prometheus
+  # Acesso: http://localhost:9216/metrics
+  # ─────────────────────────────────────────────
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: cashflow-mongodb-exporter
+    restart: unless-stopped
+    command:
+      - "--mongodb.uri=mongodb://root:root@mongodb:27017"
+      - "--collect-all"
+    ports:
+      - "9216:9216"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # redis-exporter — métricas do Redis para o Prometheus
+  # Acesso: http://localhost:9121/metrics
+  # ─────────────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: cashflow-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # elasticsearch-exporter — métricas do Elasticsearch para o Prometheus
+  # Acesso: http://localhost:9114/metrics
+  # ─────────────────────────────────────────────
+  elasticsearch-exporter:
+    image: prometheuscommunity/elasticsearch-exporter:v1.7.0
+    container_name: cashflow-elasticsearch-exporter
+    restart: unless-stopped
+    command:
+      - "--es.uri=http://elastic:changeme@elasticsearch:9200"
+      - "--es.all"
+      - "--es.indices"
+      - "--es.shards"
+    ports:
+      - "9114:9114"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
   # Prometheus — métricas (scrape /metrics)
   # ─────────────────────────────────────────────
   prometheus:
@@ -237,6 +313,14 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ALERTING_ENABLED: "true"
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      # Para habilitar envio de e-mail, configure as variáveis abaixo:
+      # GF_SMTP_ENABLED: "true"
+      # GF_SMTP_HOST: "smtp.exemplo.com:587"
+      # GF_SMTP_USER: "seu-email@exemplo.com"
+      # GF_SMTP_PASSWORD: "sua-senha"
+      # GF_SMTP_FROM_ADDRESS: "grafana@exemplo.com"
     ports:
       - "3000:3000"
     volumes:
@@ -246,6 +330,28 @@ services:
       - prometheus
     networks:
       - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Redis — cache distribuído (taskId status SSE)
+  #
+  # Acesso local:
+  #   Host: localhost:6379
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: cashflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ─────────────────────────────────────────────
   # CashFlow — backend (ASP.NET Core)
@@ -269,6 +375,8 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: rabbit
       RabbitMQ__Password: rabbit
+      # ── Redis (cache de taskId / status SSE) ──────────────────────────────
+      ConnectionStrings__RedisConnection: "redis:6379"
       # ── Keycloak ──────────────────────────────────────────────────────────
       Keycloak__Authority: "http://keycloak:8080/realms/cashflow"
       Keycloak__Audience: cashflow-api
@@ -280,6 +388,8 @@ services:
       mongodb:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       keycloak:
         condition: service_started
@@ -362,6 +472,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   mongodb_data:
+  redis_data:
   elasticsearch_data:
   prometheus_data:
   grafana_data:

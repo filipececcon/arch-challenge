@@ -1,0 +1,93 @@
+using ArchChallenge.CashFlow.Application.Common.Interfaces;
+using ArchChallenge.CashFlow.Application.Common.Notifications;
+using ArchChallenge.CashFlow.Application.Common.Tasks;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
+using ArchChallenge.CashFlow.Domain.Entities;
+using ArchChallenge.CashFlow.Domain.Enums;
+using ArchChallenge.CashFlow.Domain.Events;
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+using FluentAssertions;
+using MediatR;
+using NSubstitute;
+
+namespace ArchChallenge.CashFlow.Tests.Unit.Application;
+
+public class ExecuteTransactionHandlerTests
+{
+    private readonly IWriteRepository<Transaction> _repository;
+    private readonly IOutboxRepository _outboxRepository;
+    private readonly IPublisher _publisher;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IDbTransaction _dbTransaction;
+    private readonly ITaskCacheService _taskCache;
+    private readonly ExecuteTransactionHandler _handler;
+
+    public ExecuteTransactionHandlerTests()
+    {
+        _repository       = Substitute.For<IWriteRepository<Transaction>>();
+        _outboxRepository = Substitute.For<IOutboxRepository>();
+        _publisher        = Substitute.For<IPublisher>();
+        _dbTransaction      = Substitute.For<IDbTransaction>();
+        _taskCache        = Substitute.For<ITaskCacheService>();
+        _unitOfWork       = Substitute.For<IUnitOfWork>();
+        _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(_dbTransaction);
+        _handler = new ExecuteTransactionHandler(_repository, _outboxRepository, _publisher, _unitOfWork, _taskCache);
+    }
+
+    [Fact]
+    public async Task Handle_WithValidData_ShouldCommitAndMarkCacheAsSuccess()
+    {
+        var taskId  = Guid.NewGuid();
+        var command = new ExecuteTransactionCommand(taskId, TransactionType.Credit, 150m, "Cash sale");
+
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(1);
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        await _repository.Received(1).AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _dbTransaction.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        await _dbTransaction.DidNotReceive().RollbackAsync(Arg.Any<CancellationToken>());
+        await _taskCache.Received(1).SetSuccessAsync(taskId, Arg.Any<object>(), Arg.Any<CancellationToken>());
+        await _publisher.Received(1).Publish(
+            Arg.Is<INotification>(n => n is DomainEventNotification<TransactionDoneEvent>),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WithInvalidAmount_ShouldMarkCacheAsFailureAndRollback()
+    {
+        var taskId  = Guid.NewGuid();
+        var command = new ExecuteTransactionCommand(taskId, TransactionType.Debit, -50m, null);
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        await _repository.DidNotReceive().AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+        await _dbTransaction.Received(1).RollbackAsync(Arg.Any<CancellationToken>());
+        await _dbTransaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        await _publisher.DidNotReceive().Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>());
+        await _taskCache.Received(1).SetFailureAsync(taskId, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WhenRepositoryThrows_ShouldRollbackAndMarkCacheAsFailure()
+    {
+        var taskId  = Guid.NewGuid();
+        var command = new ExecuteTransactionCommand(taskId, TransactionType.Credit, 100m, "Test");
+
+        _repository
+            .AddAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("DB error")));
+
+        var act = async () => await _handler.Handle(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        await _dbTransaction.Received(1).RollbackAsync(Arg.Any<CancellationToken>());
+        await _dbTransaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        await _publisher.DidNotReceive().Publish(Arg.Any<INotification>(), Arg.Any<CancellationToken>());
+        await _taskCache.Received(1).SetFailureAsync(taskId, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+}

@@ -167,31 +167,61 @@ As aplicações expõem métricas no padrão Prometheus via `prometheus-net.AspN
 ### Métricas coletadas por serviço
 
 **Todas as aplicações ASP.NET Core (automáticas via `prometheus-net`):**
-- `http_requests_total` — total de requisições por rota, método e status code
+- `http_requests_received_total` — total de requisições por rota, método e status code
 - `http_request_duration_seconds` — latência de requisições (histograma)
+- `http_requests_in_progress` — requisições em andamento
 - `dotnet_gc_*` — métricas do Garbage Collector
 - `dotnet_threadpool_*` — métricas do Thread Pool
 
-**RabbitMQ (via `rabbitmq_prometheus` plugin nativo):**
-- `rabbitmq_queue_messages` — mensagens pendentes por fila
-- `rabbitmq_queue_messages_published_total` — taxa de publicação
-- `rabbitmq_queue_messages_delivered_total` — taxa de consumo
+**Infraestrutura de bancos de dados (via Prometheus Exporters — ver ADR-013):**
 
-**PostgreSQL (via `postgres_exporter`):**
-- `pg_stat_activity_count` — conexões ativas
-- `pg_stat_user_tables_*` — acessos às tabelas
+O padrão **Exporter** é usado para todos os bancos: um container dedicado se conecta ao banco, lê suas estatísticas internas e as expõe em `/metrics` para o Prometheus raspar.
+
+| Banco | Exporter | Porta | Principais métricas |
+|---|---|---|---|
+| PostgreSQL | `postgres_exporter` | 9187 | `pg_stat_activity_count`, `pg_up`, `pg_settings_max_connections` |
+| MongoDB | `mongodb_exporter` | 9216 | `mongodb_ss_connections`, `mongodb_up` |
+| Redis | `redis_exporter` | 9121 | `redis_memory_used_bytes`, `redis_up` |
+| Elasticsearch | `elasticsearch_exporter` | 9114 | `elasticsearch_jvm_memory_*`, `elasticsearch_cluster_health_status` |
+
+### Dashboards provisionados
+
+Os dashboards são provisionados automaticamente via `infra/grafana/provisioning/dashboards/` ao subir o Compose — sem importação manual:
+
+| Dashboard | Fonte | ID Grafana |
+|---|---|---|
+| PostgreSQL | `postgres.json` | 9628 |
+| MongoDB | `mongodb.json` | 7353 |
+| Redis | `redis.json` | 11835 |
+| Elasticsearch | `elasticsearch.json` | 14191 |
 
 ### Alertas configurados
 
-| Alerta | Condição | Severidade |
-|---|---|---|
-| Alta latência CashFlow | `http_request_duration_seconds{job="cashflow-api"} > 2s` por 5min | Warning |
-| Alta taxa de erro | Taxa de 5xx > 1% por 5min | Critical |
-| Fila RabbitMQ crescendo | `rabbitmq_queue_messages > 1000` por 10min | Warning |
-| Dashboard sem consumir | Sem `messages_delivered_total` por 5min | Critical |
-| PostgreSQL sem conexão | `pg_up == 0` | Critical |
+Os alertas são gerenciados pelo **Grafana Alerting** (ver ADR-014), provisionados via `infra/grafana/provisioning/alerting/`:
 
-Os alertas são roteados via **Alertmanager** para os canais configurados (Slack, e-mail, PagerDuty).
+| Serviço | Alerta | Condição | Severidade |
+|---|---|---|---|
+| cashflow-api | Taxa de erros 5xx alta | > 5% por 2min | critical |
+| cashflow-api | Latência p95 elevada | > 1s por 2min | warning |
+| PostgreSQL | Conexões altas | > 80% do limite por 2min | warning |
+| PostgreSQL | Instância fora do ar | `pg_up < 1` por 1min | critical |
+| MongoDB | Conexões altas | > 200 por 2min | warning |
+| MongoDB | Instância fora do ar | `mongodb_up < 1` por 1min | critical |
+| Redis | Memória alta | > 80% por 2min | warning |
+| Redis | Instância fora do ar | `redis_up < 1` por 1min | critical |
+| Elasticsearch | Heap JVM alto | > 85% por 2min | critical |
+| Elasticsearch | Cluster RED | `cluster_health_status{color="red"} > 0` | critical |
+
+**Política de notificação:**
+
+| Severidade | Espera antes de notificar | Repetição |
+|---|---|---|
+| `critical` | 10 segundos | A cada 1 hora |
+| `warning` | 1 minuto | A cada 6 horas |
+
+**Contact points** configurados em `infra/grafana/provisioning/alerting/contact-points.yml`:
+- **Webhook** (padrão) — substituir pela URL real em produção
+- **E-mail** — bloco comentado pronto para uso; requer configuração de `GF_SMTP_*` no Compose
 
 ---
 
@@ -205,6 +235,10 @@ Os alertas são roteados via **Alertmanager** para os canais configurados (Slack
 | Fluent Bit | `fluent/fluent-bit:3.x` | — | Coleta e ingestão de logs (planejado; ver ADR-011) |
 | Prometheus | `prom/prometheus:v2.53.2` | 9090 | Scrape e armazenamento de métricas |
 | Grafana | `grafana/grafana:11.3.0` | 3000 | Dashboards e alertas (datasource Prometheus provisionado) |
+| postgres-exporter | `prometheuscommunity/postgres-exporter:v0.15.0` | 9187 | Exporta métricas do PostgreSQL para o Prometheus |
+| mongodb-exporter | `percona/mongodb_exporter:0.40` | 9216 | Exporta métricas do MongoDB para o Prometheus |
+| redis-exporter | `oliver006/redis_exporter:v1.62.0` | 9121 | Exporta métricas do Redis para o Prometheus |
+| elasticsearch-exporter | `prometheuscommunity/elasticsearch-exporter:v1.7.0` | 9114 | Exporta métricas do Elasticsearch para o Prometheus |
 
 ---
 
@@ -252,10 +286,28 @@ O **Elasticsearch** está com **HTTP sem TLS** (`xpack.security.http.ssl.enabled
 
 ### Prometheus e Grafana
 
-- Ficheiro de configuração do Prometheus: [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml) (targets: `cashflow-api`, `dashboard-api`, `gateway` na porta interna **8080**, path `/metrics`).
-- Provisionamento do datasource no Grafana: [`infra/grafana/provisioning/datasources/datasources.yml`](../../infra/grafana/provisioning/datasources/datasources.yml) (Prometheus em `http://prometheus:9090`).
+- Configuração do Prometheus: [`infra/prometheus/prometheus.yml`](../../infra/prometheus/prometheus.yml)
+  - Targets de aplicação: `cashflow-api`, `dashboard-api`, `gateway` (porta interna **8080**, path `/metrics`)
+  - Targets de infraestrutura: `postgres-exporter:9187`, `mongodb-exporter:9216`, `redis-exporter:9121`, `elasticsearch-exporter:9114`
+- Provisionamento do Grafana em `infra/grafana/provisioning/`:
 
-Enquanto os serviços .NET não expuserem `/metrics`, os targets podem aparecer como **DOWN** no Prometheus; isso é esperado até a instrumentação estar ligada.
+```
+provisioning/
+├── datasources/
+│   └── datasources.yml       ← Prometheus como datasource padrão
+├── dashboards/
+│   ├── dashboards.yml        ← configuração do provider
+│   ├── postgres.json         ← dashboard ID 9628
+│   ├── mongodb.json          ← dashboard ID 7353
+│   ├── redis.json            ← dashboard ID 11835
+│   └── elasticsearch.json    ← dashboard ID 14191
+└── alerting/
+    ├── contact-points.yml    ← webhook (padrão) e e-mail (comentado)
+    ├── notification-policies.yml ← roteamento por severidade
+    └── rules.yml             ← 10 regras de alerta por serviço
+```
+
+Toda a configuração sobe automaticamente com `docker compose up` — nenhuma ação manual no Grafana é necessária.
 
 ---
 
@@ -278,3 +330,5 @@ Enquanto os serviços .NET não expuserem `/metrics`, os targets podem aparecer 
 | ADR | Decisão |
 |---|---|
 | [ADR-011](../decisions/ADR-011-fluent-bit-ingestor-de-logs.md) | Fluent Bit como ingestor de logs |
+| [ADR-013](../decisions/ADR-013-prometheus-exporter-pattern-metricas-infraestrutura.md) | Prometheus Exporter Pattern para métricas de infraestrutura |
+| [ADR-014](../decisions/ADR-014-grafana-alerting-sistema-centralizado-alertas.md) | Grafana Alerting como sistema centralizado de alertas |

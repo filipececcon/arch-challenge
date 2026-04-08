@@ -10,6 +10,6 @@ namespace ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 /// </summary>
 public interface IUnitOfWork
 {
-    Task<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task<IDbTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

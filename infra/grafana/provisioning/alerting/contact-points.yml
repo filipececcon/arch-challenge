@@ -1,0 +1,24 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: cashflow-webhook
+    receivers:
+      - uid: cashflow-webhook
+        type: webhook
+        settings:
+          url: "http://localhost:9000/grafana-alerts"
+          httpMethod: POST
+        disableResolveMessage: false
+
+  # Para habilitar e-mail, configure GF_SMTP_* nas envs do Grafana no docker-compose.yml
+  # e descomente o bloco abaixo:
+  #
+  # - orgId: 1
+  #   name: cashflow-email
+  #   receivers:
+  #     - uid: cashflow-email
+  #       type: email
+  #       settings:
+  #         addresses: "seu-email@exemplo.com"
+  #       disableResolveMessage: false

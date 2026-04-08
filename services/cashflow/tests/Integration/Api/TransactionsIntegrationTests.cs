@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.RegisterTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
 using ArchChallenge.CashFlow.Domain.Enums;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -13,16 +13,16 @@ public class TransactionsIntegrationTests(WebApplicationFactory<Program> factory
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task POST_Transactions_ShouldReturn201()
+    public async Task POST_Transactions_ShouldReturn202WithTaskId()
     {
-        var command = new RegisterTransactionCommand(
+        var command = new CreateTransactionCommand(
             TransactionType.Credit,
             100m,
             "Test");
 
         var response = await _client.PostAsJsonAsync("/api/transactions", command);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
     }
 
     [Fact]

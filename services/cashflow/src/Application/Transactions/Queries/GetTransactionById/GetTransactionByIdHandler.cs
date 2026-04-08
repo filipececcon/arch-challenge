@@ -1,4 +1,5 @@
 using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 

@@ -10,6 +10,6 @@ namespace ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 public interface IDomainEvent
 {
     Guid EventId { get; }
-    string EventType { get; }
+    string EventName { get; }
     DateTime OccurredAt { get; }
 }

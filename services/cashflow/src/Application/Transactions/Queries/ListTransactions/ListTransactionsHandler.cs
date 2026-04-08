@@ -1,3 +1,5 @@
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
 
 public class ListTransactionsHandler(IReadRepository<Transaction> repository)

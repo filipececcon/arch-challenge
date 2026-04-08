@@ -14,7 +14,7 @@ namespace ArchChallenge.CashFlow.Domain.Shared.Events;
 /// </summary>
 public class OutboxEvent : Entity
 {
-    /// <summary>Nome do tipo do evento (ex: "TransactionRegistered").</summary>
+    /// <summary>Nome do tipo do evento (ex: "TransactionCreated").</summary>
     public string EventType { get; private set; } = null!;
 
     /// <summary>Payload serializado em JSON com os dados do evento.</summary>

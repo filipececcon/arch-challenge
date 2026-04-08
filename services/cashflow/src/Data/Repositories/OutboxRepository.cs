@@ -1,3 +1,5 @@
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Repositories;
 
 /// <summary>

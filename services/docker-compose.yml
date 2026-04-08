@@ -1,0 +1,333 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Infraestrutura local — sem serviços da aplicação
+#
+# Use este arquivo para desenvolvimento local. Os serviços de aplicação
+# (cashflow-api, dashboard-api, frontend, gateway) devem rodar diretamente
+# na máquina host ou via IDE.
+#
+# Uso:
+#   docker compose up -d
+#   docker compose down
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ─────────────────────────────────────────────
+  # MongoDB — read model / projeção CQRS
+  #
+  # URI:      mongodb://cashflow:cashflow@localhost:27017
+  # Banco:    cashflow_read
+  # Coleção:  transactions_view
+  # UI:       http://localhost:8081  (mongo-express)
+  # ─────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: cashflow-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE:      cashflow_read
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ../infra/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # Mongo Express — UI administrativa do MongoDB
+  #
+  # Acesso: http://localhost:8081
+  #   Usuário: admin  |  Senha: admin
+  # ─────────────────────────────────────────────
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: cashflow-mongo-express
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: root
+      ME_CONFIG_MONGODB_URL:           mongodb://root:root@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME:    admin
+      ME_CONFIG_BASICAUTH_PASSWORD:    admin
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — banco de dados dos serviços
+  #
+  # Host:  localhost:5432
+  # User:  postgres  |  Senha: postgres
+  # UI:    http://localhost:5050  (pgAdmin)
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cashflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # pgAdmin — UI administrativa do PostgreSQL
+  #
+  # Acesso: http://localhost:5050
+  #   E-mail: admin@admin.com  |  Senha: admin
+  # ─────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: cashflow-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # RabbitMQ — broker de mensagens entre serviços
+  #
+  # AMQP:          localhost:5672
+  # Management UI: http://localhost:15672
+  #   Usuário: rabbit  |  Senha: rabbit
+  # ─────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: cashflow-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbit
+      RABBITMQ_DEFAULT_PASS: rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Redis — cache distribuído (taskId status SSE)
+  #
+  # Host: localhost:6379
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: cashflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Keycloak — Identity Provider (OAuth2/OIDC)
+  #
+  # Acesso: http://localhost:8080
+  #   Admin: admin  |  Senha: admin
+  # ─────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: cashflow-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../infra/keycloak/cashflow-realm.json:/opt/keycloak/data/import/cashflow-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Elasticsearch — logs e dados do APM
+  # ─────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: cashflow-elasticsearch
+    restart: unless-stopped
+    environment:
+      - node.name=es01
+      - cluster.name=cashflow-cluster
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:changeme http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=10s | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 20s
+      retries: 30
+      start_period: 90s
+
+  # ─────────────────────────────────────────────
+  # Kibana — UI (logs, Discover, APM, etc.)
+  #
+  # Acesso: http://localhost:5601
+  # ─────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: cashflow-kibana
+    restart: unless-stopped
+    environment:
+      - SERVER_NAME=kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=none
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=cashflow-kibana-encrypted-saved-objects-key-32b-min
+      - XPACK_SECURITY_ENCRYPTIONKEY=cashflow-kibana-security-encryption-key-32-chars!!
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"level\":\"available\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  # ─────────────────────────────────────────────
+  # Elastic APM Server — ingestão de traces dos agentes
+  #
+  # Acesso: http://localhost:8200
+  # ─────────────────────────────────────────────
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.3
+    container_name: cashflow-apm-server
+    restart: unless-stopped
+    volumes:
+      - ../infra/apm-server/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+    ports:
+      - "8200:8200"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Prometheus — métricas (scrape /metrics)
+  #
+  # Acesso: http://localhost:9090
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.2
+    container_name: cashflow-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
+  # Grafana — dashboards
+  #
+  # Acesso: http://localhost:3000
+  #   Admin: admin  |  Senha: admin
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: cashflow-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - cashflow-network
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  rabbitmq_data:
+  mongodb_data:
+  redis_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  cashflow-network:
+    driver: bridge

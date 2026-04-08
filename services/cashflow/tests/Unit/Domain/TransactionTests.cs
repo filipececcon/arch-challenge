@@ -68,14 +68,14 @@ public class TransactionTests
     }
 
     [Fact]
-    public void Create_ShouldRaiseTransactionRegisteredEvent()
+    public void Create_ShouldRaiseTransactionCreatedEvent()
     {
         var entity = new Transaction(TransactionType.Credit, 200m);
 
         entity.IsValid.Should().BeTrue();
         // entity.Events.Should().HaveCount(1);
         // entity.Events[0].TransactionId.Should().Be(entity.Id);
-        // entity.Events[0].EventType.Should().Be("TransactionRegistered");
+        // entity.Events[0].EventName.Should().Be("TransactionCreated");
     }
 
     [Fact]

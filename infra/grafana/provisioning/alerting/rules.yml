@@ -1,0 +1,357 @@
+apiVersion: 1
+
+groups:
+  # ──────────────────────────────────────────────────────────
+  # CashFlow API
+  # ──────────────────────────────────────────────────────────
+  - orgId: 1
+    name: cashflow-api
+    folder: CashFlow Alerts
+    interval: 1m
+    rules:
+      - uid: api-high-error-rate
+        title: "API — Taxa de erros alta (5xx)"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(http_requests_received_total{job="cashflow-api", code=~"5.."}[5m]))
+                /
+                sum(rate(http_requests_received_total{job="cashflow-api"}[5m]))
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.05]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Taxa de erros 5xx acima de 5% nos últimos 5 minutos"
+        labels:
+          severity: critical
+          service: cashflow-api
+
+      - uid: api-high-latency
+        title: "API — Latência alta (p95 > 1s)"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                histogram_quantile(0.95,
+                  sum(rate(http_request_duration_seconds_bucket{job="cashflow-api"}[5m])) by (le)
+                )
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "p95 de latência da API acima de 1 segundo"
+        labels:
+          severity: warning
+          service: cashflow-api
+
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL
+  # ──────────────────────────────────────────────────────────
+  - orgId: 1
+    name: postgresql
+    folder: CashFlow Alerts
+    interval: 1m
+    rules:
+      - uid: pg-high-connections
+        title: "PostgreSQL — Conexões acima de 80%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(pg_stat_activity_count{job="postgres"})
+                /
+                sum(pg_settings_max_connections{job="postgres"})
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.8]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Conexões ativas no PostgreSQL acima de 80% do limite"
+        labels:
+          severity: warning
+          service: postgres
+
+      - uid: pg-down
+        title: "PostgreSQL — Instância indisponível"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: "pg_up{job=\"postgres\"}"
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  query:
+                    params: [A]
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "PostgreSQL está fora do ar"
+        labels:
+          severity: critical
+          service: postgres
+
+  # ──────────────────────────────────────────────────────────
+  # MongoDB
+  # ──────────────────────────────────────────────────────────
+  - orgId: 1
+    name: mongodb
+    folder: CashFlow Alerts
+    interval: 1m
+    rules:
+      - uid: mongo-high-connections
+        title: "MongoDB — Conexões acima de 200"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: "mongodb_ss_connections{conn_type=\"current\", job=\"mongodb\"}"
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [200]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "MongoDB com mais de 200 conexões ativas"
+        labels:
+          severity: warning
+          service: mongodb
+
+      - uid: mongo-down
+        title: "MongoDB — Instância indisponível"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: "mongodb_up{job=\"mongodb\"}"
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  query:
+                    params: [A]
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "MongoDB está fora do ar"
+        labels:
+          severity: critical
+          service: mongodb
+
+  # ──────────────────────────────────────────────────────────
+  # Redis
+  # ──────────────────────────────────────────────────────────
+  - orgId: 1
+    name: redis
+    folder: CashFlow Alerts
+    interval: 1m
+    rules:
+      - uid: redis-high-memory
+        title: "Redis — Uso de memória acima de 80%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                redis_memory_used_bytes{job="redis"}
+                /
+                redis_memory_max_bytes{job="redis"}
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.8]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Redis usando mais de 80% da memória configurada"
+        labels:
+          severity: warning
+          service: redis
+
+      - uid: redis-down
+        title: "Redis — Instância indisponível"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: "redis_up{job=\"redis\"}"
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  query:
+                    params: [A]
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Redis está fora do ar"
+        labels:
+          severity: critical
+          service: redis
+
+  # ──────────────────────────────────────────────────────────
+  # Elasticsearch
+  # ──────────────────────────────────────────────────────────
+  - orgId: 1
+    name: elasticsearch
+    folder: CashFlow Alerts
+    interval: 1m
+    rules:
+      - uid: es-high-heap
+        title: "Elasticsearch — Heap JVM acima de 85%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                elasticsearch_jvm_memory_used_bytes{area="heap", job="elasticsearch"}
+                /
+                elasticsearch_jvm_memory_max_bytes{area="heap", job="elasticsearch"}
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.85]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Heap JVM do Elasticsearch acima de 85%"
+        labels:
+          severity: critical
+          service: elasticsearch
+
+      - uid: es-cluster-red
+        title: "Elasticsearch — Cluster com status RED"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: "elasticsearch_cluster_health_status{color=\"red\", job=\"elasticsearch\"}"
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Cluster do Elasticsearch está com status RED (shards não alocados)"
+        labels:
+          severity: critical
+          service: elasticsearch
