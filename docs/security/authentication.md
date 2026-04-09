@@ -31,7 +31,7 @@ sequenceDiagram
     A->>K: POST /token (troca code + code_verifier por tokens)
     K->>A: access_token (5min) + refresh_token (30min) + id_token
     A->>A: Armazena tokens em MEMÓRIA
-    A->>G: GET /cashflow/v1/transaction — Authorization: Bearer <JWT>
+    A->>G: GET /cashflow/v1/transactions — Authorization: Bearer <JWT>
     G->>G: Valida JWT + roles
     G->>C: Roteia requisição autenticada
     C->>A: Resposta
@@ -108,22 +108,27 @@ JWT contendo os dados de perfil do usuário (nome, e-mail). Usado exclusivamente
 
 O trade-off do armazenamento em memória é que o usuário precisa fazer login novamente ao recarregar a página. Isso é mitigado pelo `refresh_token` — enquanto a sessão no Keycloak estiver ativa, o Angular obtém novos tokens silenciosamente (silent refresh via iframe oculto ou refresh endpoint).
 
-### Configuração do `angular-auth-oidc-client`
+### Implementação OIDC/PKCE no Angular
+
+A autenticação é implementada de forma **manual** (sem biblioteca de terceiros), utilizando os serviços nativos do Angular (`HttpClient`, `Router`) e a Web Crypto API do browser para gerar o `code_verifier`/`code_challenge` do PKCE.
+
+Os principais artefatos estão em `services/frontend/src/app/core/auth/`:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `auth.service.ts` | Orquestra o fluxo OIDC: geração de PKCE, redirect para Keycloak, troca do code por tokens, renovação via refresh token |
+| `auth.guard.ts` | Route guard — redireciona para login se não houver token válido em memória |
+| `auth-callback.component.ts` | Processa o retorno do Keycloak (extrai `code` da URL e realiza a troca de tokens) |
+| `token.interceptor.ts` | Interceptor HTTP — injeta `Authorization: Bearer <token>` em todas as requisições para o gateway |
+
+Configuração mínima (variáveis de ambiente em `environment.ts`):
 
 ```typescript
-export const authConfig: PassedInitialConfig = {
-  config: {
-    authority: 'http://localhost:8080/realms/cashflow',
-    redirectUrl: window.location.origin + '/callback',
-    postLogoutRedirectUri: window.location.origin,
-    clientId: 'cashflow-frontend',
-    scope: 'openid profile email',
-    responseType: 'code',
-    silentRenew: true,
-    useRefreshToken: true,
-    renewTimeBeforeTokenExpiresInSeconds: 30,
-    secureRoutes: ['http://localhost:5000'],  // injeta Bearer token automaticamente
-  }
+export const environment = {
+  keycloakAuthority: 'http://localhost:8080/realms/cashflow',
+  keycloakClientId: 'cashflow-frontend',
+  gatewayBaseUrl: 'http://localhost:5000',
+  redirectUri: 'http://localhost:4200/callback',
 };
 ```
 
@@ -154,10 +159,120 @@ Isso garante que um logout no módulo CashFlow também encerra a sessão no mód
 
 ---
 
+## Validação do JWT no Gateway — JWKS Discovery e chave pública RSA
+
+O gateway **nunca envia o token ao Keycloak para validar**. A validação é feita **localmente**, usando criptografia assimétrica RSA: o Keycloak assina o token com sua chave privada e o gateway verifica a assinatura com a chave pública correspondente.
+
+### Startup — OIDC Discovery e cache das chaves públicas
+
+Ao iniciar, o middleware `AddJwtBearer` do ASP.NET Core realiza automaticamente o fluxo de descoberta OIDC:
+
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
+sequenceDiagram
+    autonumber
+    participant G as Ocelot Gateway
+    participant K as Keycloak
+
+    Note over G: Startup da aplicação
+    G->>K: GET /realms/cashflow/.well-known/openid-configuration
+    K->>G: JSON com metadados do realm (issuer, jwks_uri, endpoints...)
+    G->>K: GET /realms/cashflow/protocol/openid-connect/certs
+    K->>G: JWKS — conjunto de chaves públicas RSA ativas
+    G->>G: Armazena chaves públicas em memória (cache)
+    Note over G: Gateway pronto para validar tokens localmente
+```
+
+> O Keycloak só é contactado nesse momento. Nenhuma requisição de usuário depende de chamada ao Keycloak para validação.
+
+---
+
+### Por request — Validação local do JWT
+
+Cada requisição autenticada tem seu token validado inteiramente no processo do gateway:
+
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
+sequenceDiagram
+    autonumber
+    actor U as Cliente (Angular)
+    participant G as Ocelot Gateway
+    participant C as API Downstream
+
+    U->>G: GET /cashflow/v1/transactions<br/>Authorization: Bearer <JWT>
+
+    Note over G: Etapa 1 — Verificação criptográfica
+    G->>G: Decodifica header do JWT (alg, kid)
+    G->>G: Busca chave pública no cache pelo kid
+    G->>G: Verifica assinatura RSA — sem chamada de rede
+
+    Note over G: Etapa 2 — Validação de claims
+    G->>G: Verifica exp (token não expirado)
+    G->>G: Verifica iss (issuer esperado)
+    G->>G: Verifica aud (cashflow-api | dashboard-api | account)
+
+    Note over G: Etapa 3 — Transformação e autorização
+    G->>G: KeycloakRolesClaimsTransformation<br/>mapeia realm_access.roles → claim "roles"
+    G->>G: CommaSeparatedRolesClaimsAuthorizer<br/>verifica roles exigidas pela rota (ocelot.json)
+
+    alt Token válido e roles satisfeitas
+        G->>C: Repassa requisição ao downstream
+        C->>U: Resposta
+    else Token inválido ou roles insuficientes
+        G->>U: 401 Unauthorized / 403 Forbidden
+    end
+```
+
+---
+
+### Renovação automática de chaves (JWKS Rotation)
+
+O Keycloak pode rotacionar suas chaves RSA (ex.: por política de segurança). O gateway lida com isso automaticamente:
+
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false}}}%%
+sequenceDiagram
+    autonumber
+    participant G as Ocelot Gateway
+    participant K as Keycloak
+
+    Note over G: Token chega com kid desconhecido no cache
+    G->>G: Busca kid no cache — não encontrado
+    G->>K: GET /realms/cashflow/protocol/openid-connect/certs
+    K->>G: JWKS atualizado com novas chaves
+    G->>G: Atualiza cache de chaves públicas
+    G->>G: Revalida o token com a nova chave
+```
+
+> Tokens assinados com chaves antigas (removidas do JWKS) passam a ser rejeitados automaticamente após a rotação.
+
+---
+
+### Por que não é necessário um secret
+
+| Abordagem | Funcionamento | Risco |
+|---|---|---|
+| Simétrica (HS256) | Um único secret compartilhado entre KC e gateway — quem tem o secret pode assinar e verificar | Secret vazado compromete todo o sistema |
+| **Assimétrica (RS256) — adotada** | KC assina com chave privada (nunca sai do KC); gateway verifica com chave pública (pode ser distribuída livremente) | Vazamento da chave pública não permite forjar tokens |
+
+O gateway só precisa da **chave pública RSA**, que é pública por definição — disponível abertamente no endpoint `/certs` do Keycloak.
+
+---
+
+### Comportamento com Keycloak offline
+
+| Situação | Comportamento |
+|---|---|
+| KC offline após startup | Gateway continua validando tokens com as chaves em cache |
+| KC offline no startup | Gateway falha ao iniciar (sem chaves para validar) |
+| Token expirado + KC offline | Token rejeitado normalmente pelo `exp` — sem impacto |
+| Rotação de chave + KC offline | Tokens com o novo `kid` são rejeitados até o KC voltar e o cache ser atualizado |
+
+---
+
 ## Referências
 
 - [OAuth 2.0 Authorization Code Flow with PKCE — RFC 7636](https://tools.ietf.org/html/rfc7636)
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - [Keycloak — Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/)
-- [angular-auth-oidc-client](https://github.com/damienbod/angular-auth-oidc-client)
 - [OWASP — Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)

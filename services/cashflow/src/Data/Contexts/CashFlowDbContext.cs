@@ -16,7 +16,6 @@ public class CashFlowDbContext(DbContextOptions<CashFlowDbContext> options) : Db
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasDefaultSchema("cashflow");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CashFlowDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

@@ -15,6 +15,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: |
                 sum(rate(http_requests_received_total{job="cashflow-api", code=~"5.."}[5m]))
@@ -48,6 +51,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: |
                 histogram_quantile(0.95,
@@ -89,6 +95,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: |
                 sum(pg_stat_activity_count{job="postgres"})
@@ -122,6 +131,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: "pg_up{job=\"postgres\"}"
               instant: true
@@ -160,6 +172,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: "mongodb_ss_connections{conn_type=\"current\", job=\"mongodb\"}"
               instant: true
@@ -190,6 +205,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: "mongodb_up{job=\"mongodb\"}"
               instant: true
@@ -228,6 +246,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: |
                 redis_memory_used_bytes{job="redis"}
@@ -261,6 +282,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: "redis_up{job=\"redis\"}"
               instant: true
@@ -299,6 +323,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: |
                 elasticsearch_jvm_memory_used_bytes{area="heap", job="elasticsearch"}
@@ -332,6 +359,9 @@ groups:
         data:
           - refId: A
             datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
             model:
               expr: "elasticsearch_cluster_health_status{color=\"red\", job=\"elasticsearch\"}"
               instant: true

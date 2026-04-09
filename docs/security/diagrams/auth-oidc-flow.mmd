@@ -27,7 +27,7 @@ sequenceDiagram
     A->>A: Armazena tokens em MEMÓRIA<br/>(não em localStorage)
 
     U->>A: Interage com a aplicação
-    A->>G: GET /cashflow/v1/transaction<br/>Authorization: Bearer <access_token>
+    A->>G: GET /cashflow/v1/transactions<br/>Authorization: Bearer <access_token>
 
     G->>K: GET /protocol/openid-connect/certs<br/>(busca chave pública JWKS — cacheada)
     K->>G: Retorna chaves públicas (JWKS)

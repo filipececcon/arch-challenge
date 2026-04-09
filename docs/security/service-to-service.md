@@ -26,10 +26,11 @@ graph TD
         CF["CashFlow API :8080"]
         DA["Dashboard API :8080"]
         PG[("PostgreSQL :5432")]
+        MG[("MongoDB :27017")]
+        RDS["Redis :6379"]
         RMQ["RabbitMQ :5672"]
         ES[("Elasticsearch :9200")]
-        FB["Fluent Bit"]
-        APMS["APM Server"]
+        APMS["APM Server :8200"]
         KIB["Kibana :5601"]
         GRF["Grafana :3000"]
         RMGMT["RabbitMQ Mgmt :15672"]
@@ -42,12 +43,13 @@ graph TD
         DA -->|"consume"| RMQ
 
         CF --> PG
+        CF --> MG
+        CF --> RDS
         DA --> PG
         KC --> PG
 
-        FB --> ES
-        KIB --> ES
         APMS --> ES
+        KIB --> ES
     end
 ```
 
@@ -57,18 +59,23 @@ graph TD
 |---|---|---|---|
 | Gateway | 5000 | 5000 | Único ponto de entrada das APIs |
 | Keycloak | 8080 | 8080 | UI de administração e OIDC discovery |
+| CashFlow API | 5001 | 8080 | Acesso direto para testes em desenvolvimento |
+| Dashboard API | 5002 | 8080 | Acesso direto para testes em desenvolvimento |
 | RabbitMQ Management | 15672 | 15672 | UI de administração (apenas dev) |
 | Kibana | 5601 | 5601 | Visualização de logs (apenas dev) |
 | Grafana | 3000 | 3000 | Dashboards (apenas dev) |
+| Elasticsearch | 9200 | 9200 | API REST (apenas dev) |
+| Prometheus | 9090 | 9090 | UI de consulta (apenas dev) |
 
-**Portas internas APENAS** (não publicadas externamente):
+> **Importante:** Em **produção**, as portas das APIs (5001/5002), banco de dados, filas e observabilidade **não devem ser publicadas**. Apenas o Gateway (5000) e o Keycloak (8080) devem ser expostos externamente — preferencialmente atrás de um Load Balancer com TLS.
+
+**Portas internas APENAS** (não publicadas mesmo em dev):
 
 | Serviço | Porta Interna | Motivo |
 |---|---|---|
-| CashFlow API | 8080 | Acessível apenas pelo Gateway e pela rede interna |
-| Dashboard API | 8080 | Acessível apenas pelo Gateway e pela rede interna |
 | PostgreSQL | 5432 | Acessível apenas pelos serviços que precisam de banco |
-| Elasticsearch | 9200 | Acessível apenas pelo Fluent Bit, Kibana e APM Server |
+| MongoDB | 27017 | Acessível apenas pela CashFlow API |
+| Redis | 6379 | Acessível apenas pela CashFlow API |
 | RabbitMQ AMQP | 5672 | Acessível apenas pelos produtores e consumidores |
 
 > **Importante:** Em produção, as portas de administração (RabbitMQ Management, Kibana, Grafana) também devem ficar atrás de autenticação ou VPN, não expostas publicamente.
@@ -90,7 +97,7 @@ graph TD
 
     DA["Dashboard API<br/>(dashboard-service)"]
 
-    CF -->|"publish(LancamentoRegistrado)<br/>amqp://cashflow-service@rabbitmq:5672"| EX
+    CF -->|"publish(LancamentoRegistrado)<br/>amqp://rabbit@rabbitmq:5672"| EX
     EX -->|"routing key: lancamento.registrado"| Q
     Q -->|"consume"| DA
     DA -.->|"ack (após processamento bem-sucedido)"| Q
@@ -98,14 +105,14 @@ graph TD
 
 ### Autenticação no RabbitMQ
 
-Cada serviço usa credenciais dedicadas para conexão ao RabbitMQ — não compartilham o mesmo usuário:
+Em desenvolvimento, ambos os serviços usam as mesmas credenciais padrão do container RabbitMQ (`rabbit` / `rabbit`), injetadas via variáveis de ambiente no `docker-compose.yml`. Em produção, as credenciais devem ser diferenciadas por serviço e injetadas via secrets:
 
-| Serviço | Usuário RabbitMQ | Permissões |
+| Ambiente | Usuário RabbitMQ | Como injetar |
 |---|---|---|
-| CashFlow API | `cashflow-service` | Publish na exchange `cashflow.events` |
-| Dashboard API | `dashboard-service` | Consume na queue `dashboard.lancamento.registrado` |
+| Desenvolvimento | `rabbit` | Variável de ambiente no Compose |
+| Produção (recomendado) | Usuário dedicado por serviço | Kubernetes Secrets / Vault |
 
-Em produção, essas credenciais são injetadas via secrets (não variáveis de ambiente em texto claro).
+Em produção, recomenda-se criar usuários dedicados `cashflow-service` e `dashboard-service` no RabbitMQ com permissões mínimas (publish / consume respectivamente), injetados via secrets gerenciados.
 
 ### Resiliência da fila
 
@@ -139,7 +146,7 @@ sequenceDiagram
 
     S->>K: POST /token — grant_type=client_credentials
     K->>S: access_token (sub = "relatorios-api", roles = ["gestor"])
-    S->>G: GET /dashboard/v1/consolidate — Bearer <access_token>
+    S->>G: GET /dashboard/v1/daily-balances — Bearer <access_token>
     G->>G: Valida JWT + verifica role "gestor"
     G->>D: Roteia requisição
     D->>S: 200 OK + dados do consolidado

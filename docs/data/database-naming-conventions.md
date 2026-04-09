@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Este documento define o padrão de nomenclatura para todos os objetos de banco de dados relacional criados a partir de serviços Java. As convenções aqui descritas são **obrigatórias** e se aplicam independente da abordagem utilizada (JPA/Hibernate, JDBC, Flyway, Liquibase, etc.).
+Este documento define o padrão de nomenclatura para todos os objetos de banco de dados relacional criados pelos serviços .NET do sistema. As convenções aqui descritas são **obrigatórias** e se aplicam independente da abordagem utilizada (EF Core Migrations, SQL puro, scripts de inicialização, etc.).
 
 **Regras gerais:**
 - Todos os nomes devem estar em **MAIÚSCULAS**

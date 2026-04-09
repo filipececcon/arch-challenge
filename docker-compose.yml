@@ -155,15 +155,33 @@ services:
     networks:
       - cashflow-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -u elastic:changeme http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=10s | grep -qE '\"status\":\"(green|yellow)\"'"]
+      test: ["CMD-SHELL", "curl -s -u elastic:changeme 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=10s' | grep -qE '\"status\":\"(green|yellow)\"'"]
       interval: 10s
       timeout: 20s
       retries: 30
       start_period: 90s
 
-  # ─────────────────────────────────────────────
-  # Kibana — UI (logs, Discover, APM, etc.)
-  # ─────────────────────────────────────────────
+  elasticsearch-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: cashflow-elasticsearch-setup
+    profiles: [observability]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+    command:
+      - bash
+      - -c
+      - |
+        echo "Configurando senha do kibana_system..."
+        until curl -s -o /dev/null -w "%{http_code}" -u elastic:changeme -X POST http://elasticsearch:9200/_security/user/kibana_system/_password -H "Content-Type: application/json" -d '{"password":"kibana_changeme"}' | grep -q "200"; do
+          echo "Aguardando Elasticsearch aceitar a requisicao..."
+          sleep 5
+        done
+        echo "Senha do kibana_system configurada com sucesso!"
+    restart: on-failure
+
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.3
     container_name: cashflow-kibana
@@ -171,8 +189,8 @@ services:
     environment:
       - SERVER_NAME=kibana
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=changeme
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana_changeme
       - ELASTICSEARCH_SSL_VERIFICATIONMODE=none
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=cashflow-kibana-encrypted-saved-objects-key-32b-min
       - XPACK_SECURITY_ENCRYPTIONKEY=cashflow-kibana-security-encryption-key-32-chars!!
@@ -181,6 +199,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+      elasticsearch-setup:
+        condition: service_completed_successfully
     networks:
       - cashflow-network
     healthcheck:
@@ -380,6 +400,12 @@ services:
       # ── Keycloak ──────────────────────────────────────────────────────────
       Keycloak__Authority: "http://keycloak:8080/realms/cashflow"
       Keycloak__Audience: cashflow-api
+      # ── Elastic APM ───────────────────────────────────────────────────────
+      ELASTIC_APM_SERVER_URL: "http://apm-server:8200"
+      ELASTIC_APM_SERVICE_NAME: "cashflow-api"
+      ELASTIC_APM_SERVICE_VERSION: "1.0.0"
+      ELASTIC_APM_ENVIRONMENT: "Development"
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
     ports:
       - "5001:8080"
     depends_on:

@@ -8,6 +8,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Api", "src\Api\Api.csproj", "{6B2C6652-262F-464D-ACD9-25CFB6B0691E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "1. Application", "1. Application", "{4466A3E5-A7E9-4C3D-B01E-F1279915FC9C}"
+	ProjectSection(SolutionItems) = preProject
+		appsettings.json = appsettings.json
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "src\Application\Application.csproj", "{3FF2EB48-2FDD-48EB-B977-3A1A73B13B28}"
 EndProject
@@ -36,6 +39,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "I18n", "src\I18n\I18n.csproj", "{9F659E2A-81A5-4EDC-8697-F11F4559C97B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Caching", "src\Caching\Caching.csproj", "{23723051-C3A7-4153-B497-21DD9C5CCC13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Logging", "src\Logging\Logging.csproj", "{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -86,6 +91,10 @@ Global
 		{23723051-C3A7-4153-B497-21DD9C5CCC13}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{23723051-C3A7-4153-B497-21DD9C5CCC13}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{23723051-C3A7-4153-B497-21DD9C5CCC13}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{6B2C6652-262F-464D-ACD9-25CFB6B0691E} = {FBC842C8-0219-43ED-950D-548177D1E4B3}
@@ -100,5 +109,6 @@ Global
 		{900993EE-10BC-4D9B-B704-172A30A8F2EC} = {1BEEFB87-151B-4F78-A25F-726959410C18}
 		{9F659E2A-81A5-4EDC-8697-F11F4559C97B} = {DC434B16-4D78-4826-ABB3-76B857609438}
 		{23723051-C3A7-4153-B497-21DD9C5CCC13} = {DC434B16-4D78-4826-ABB3-76B857609438}
+		{1D2E3F4A-5B6C-7D8E-9F0A-1B2C3D4E5F6A} = {DC434B16-4D78-4826-ABB3-76B857609438}
 	EndGlobalSection
 EndGlobal

@@ -24,14 +24,14 @@ public static class DependencyInjection
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                // Exchange de entrada para criação de transações
+                // Exchange de entrada para criação de transações (Fanout é o padrão do MassTransit e compatível com Publish())
                 cfg.Message<CreateTransactionMessage>(m => m.SetEntityName("cashflow.transaction.create"));
-                cfg.Publish<CreateTransactionMessage>(p => p.ExchangeType = ExchangeType.Direct);
 
                 // Fila consumida pelo ExecuteTransactionConsumer
+                // ConfigureConsumeTopology = false evita o auto-bind exchange→exchange com mesmo nome (self-binding inválido no RabbitMQ)
                 cfg.ReceiveEndpoint("cashflow.transaction.create", e =>
                 {
-                    e.Bind("cashflow.transaction.create");
+                    e.ConfigureConsumeTopology = false;
                     e.ConfigureConsumer<ExecuteTransactionConsumer>(ctx);
                 });
                 

@@ -29,8 +29,10 @@ Detalha os containers que compõem o sistema: aplicações, bancos de dados, men
 - **API Gateway (Ocelot)** — ponto único de entrada, autenticação JWT e roteamento
 - **CashFlow Backend** — API ASP.NET Core para registro de lançamentos
 - **Dashboard Backend** — API ASP.NET Core para consolidado diário
-- **CashFlow Frontend** e **Dashboard Frontend** — SPAs Angular
+- **Frontend SPA Unificada (Angular 19 + Tailwind CSS)** — aplicação única com feature modules lazy-loaded para CashFlow e Dashboard (ver ADR-010)
 - **PostgreSQL** — banco de dados dedicado por serviço (Database per Service)
+- **MongoDB** — read model / projeções da CashFlow API
+- **Redis** — cache (ex.: task IDs para operações SSE)
 - **RabbitMQ** — broker de mensagens para comunicação assíncrona entre serviços
 - **Keycloak** — Identity Provider (OAuth 2.0 / OIDC)
 
@@ -38,7 +40,11 @@ Detalha os containers que compõem o sistema: aplicações, bancos de dados, men
 
 ## Nível 3 — Component (C3)
 
-Aprofunda a visão interna de cada container, mostrando os componentes e suas responsabilidades.
+O nível C3 está dividido em **dois diagramas complementares**, separando as responsabilidades de negócio da plataforma de observabilidade.
+
+### C3-a — Componentes de Negócio
+
+Aprofunda a visão interna dos serviços de negócio (CashFlow, Dashboard e Gateway), mostrando os componentes e suas responsabilidades.
 
 ![Diagrama C3 — Components](./diagrams/Architecture-C3%20-%20Components.png)
 
@@ -47,6 +53,33 @@ Aprofunda a visão interna de cada container, mostrando os componentes e suas re
 - Publicação e consumo de eventos via RabbitMQ (`LancamentoRegistrado`)
 - Integração do Gateway com o Keycloak para validação de JWT
 - Separação clara entre os bounded contexts CashFlow e Dashboard
+
+---
+
+### C3-b — Observabilidade
+
+Detalha os componentes que compõem a plataforma de observabilidade, organizada em quatro tiers independentes com exporters de métricas de infraestrutura.
+
+![Diagrama C3 — Observability](./diagrams/Architecture-C3%20-%20Observability.png)
+
+**O que este diagrama mostra:**
+
+| Tier | Componentes | Responsabilidade |
+|---|---|---|
+| **Logs** | FluentBit, Elasticsearch, Kibana | Coleta (stdout dos containers), armazenamento e visualização de logs estruturados |
+| **Tracing** | Elastic APM | Coleta e armazenamento de traces distribuídos (spans entre Gateway, CashFlow e Dashboard) |
+| **Metrics** | Prometheus | Scraping periódico do endpoint `/metrics` dos serviços de negócio |
+| **Monitoring & Alerts** | Grafana | Dashboards consolidados e alertas baseados nas métricas do Prometheus |
+| **Metrics Exporters** | Postgres Exporter, Mongo Exporter, Redis Exporter, Elastic Exporter | Agentes que expõem métricas internas de cada banco/infra no padrão Prometheus (`/metrics`) |
+
+**Fluxos de dados no diagrama:**
+
+- `STD` — aplicações emitem logs estruturados para `stdout`; FluentBit coleta e encaminha ao Elasticsearch
+- `LDB` — conexão de logs com o Elasticsearch (FluentBit, Elastic APM e Elastic Exporter)
+- `SCPR` — Prometheus raspa os endpoints `/metrics` dos exporters e das APIs
+- `PG / MG / RD` — conexões de leitura dos exporters com PostgreSQL, MongoDB e Redis respectivamente
+
+> **Nota:** O FluentBit está planejado conforme [ADR-011](../decisions/ADR-011-fluent-bit-ingestor-de-logs.md) mas ainda não está provisionado no `docker-compose.yml`. Os demais componentes já estão ativos. Ver [`observability.md`](../operations/observability.md) para detalhes de configuração e acessos locais.
 
 ---
 
@@ -60,10 +93,22 @@ Diagrama de classes gerado diretamente pela IDE, detalhando a estrutura de códi
 
 ## Decisões arquiteturais relacionadas
 
-| ADR | Decisão |
-|---|---|
-| [ADR-002](../decisions/ADR-002-separacao-cashflow-dashboard.md) | Separação em dois bounded contexts: CashFlow e Dashboard |
-| [ADR-003](../decisions/ADR-003-comunicacao-assincrona-rabbitmq.md) | Comunicação assíncrona via RabbitMQ |
-| [ADR-004](../decisions/ADR-004-backend-aspnet-core.md) | Backend com ASP.NET Core |
-| [ADR-008](../decisions/ADR-008-autenticacao-autorizacao-keycloak.md) | Autenticação e autorização com Keycloak |
-| [ADR-009](../decisions/ADR-009-api-gateway-ocelot.md) | API Gateway com Ocelot |
+### Negócio e infraestrutura
+
+| ADR | Decisão | Diagrama |
+|---|---|---|
+| [ADR-002](../decisions/ADR-002-separacao-cashflow-dashboard.md) | Separação em dois bounded contexts: CashFlow e Dashboard | C3-a |
+| [ADR-003](../decisions/ADR-003-comunicacao-assincrona-rabbitmq.md) | Comunicação assíncrona via RabbitMQ | C3-a |
+| [ADR-004](../decisions/ADR-004-backend-aspnet-core.md) | Backend com ASP.NET Core | C3-a |
+| [ADR-005](../decisions/ADR-005-frontend-angular.md) | Frontend com Angular 19 + Tailwind CSS | C2 |
+| [ADR-008](../decisions/ADR-008-autenticacao-autorizacao-keycloak.md) | Autenticação e autorização com Keycloak | C2, C3-a |
+| [ADR-009](../decisions/ADR-009-api-gateway-ocelot.md) | API Gateway com Ocelot | C2, C3-a |
+| [ADR-010](../decisions/ADR-010-frontend-unificado-com-feature-modules.md) | Frontend unificado com feature modules lazy-loaded | C2 |
+
+### Observabilidade
+
+| ADR | Decisão | Diagrama |
+|---|---|---|
+| [ADR-011](../decisions/ADR-011-fluent-bit-ingestor-de-logs.md) | Fluent Bit como ingestor de logs | C3-b (Logs Tier) |
+| [ADR-013](../decisions/ADR-013-prometheus-exporter-pattern-metricas-infraestrutura.md) | Prometheus Exporter Pattern para métricas de infraestrutura | C3-b (Metrics Exporters) |
+| [ADR-014](../decisions/ADR-014-grafana-alerting-sistema-centralizado-alertas.md) | Grafana Alerting como sistema centralizado de alertas | C3-b (Monitoring & Alerts) |

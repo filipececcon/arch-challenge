@@ -6,7 +6,9 @@ Este documento descreve a estratégia de observabilidade adotada para o sistema 
 
 ## Visão Geral
 
-O diagrama de arquitetura (Mermaid) está em [`diagrams/observability-overview.mmd`](./diagrams/observability-overview.mmd). Abra o ficheiro no IDE com extensão Mermaid ou exporte para SVG/PNG a partir do [Mermaid Live Editor](https://mermaid.live/).
+O diagrama de componentes da plataforma de observabilidade está em **[`docs/architecture/diagrams/Architecture-C3 - Observability.png`](../architecture/diagrams/Architecture-C3%20-%20Observability.png)** (C3-b no modelo C4 — ver [`docs/architecture/README.md`](../architecture/README.md)).
+
+O diagrama de fluxo de dados (Mermaid) está em [`diagrams/observability-overview.mmd`](./diagrams/observability-overview.mmd). Abra o ficheiro no IDE com extensão Mermaid ou exporte para SVG/PNG a partir do [Mermaid Live Editor](https://mermaid.live/).
 
 ---
 

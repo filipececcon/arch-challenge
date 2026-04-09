@@ -9,12 +9,12 @@ graph TD
     Internet(["🌐 Internet / Clientes"])
     Internet --> GW
 
-    subgraph GW_ZONE["ÚNICO ponto de entrada externo"]
-        GW["Ocelot Gateway :5000<br/>• Rate Limiting<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement"]
+    subgraph GW_ZONE["ÚNICO ponto de entrada externo (produção)"]
+        GW["Ocelot Gateway :5000<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement"]
     end
 
-    GW -->|"rede Docker interna"| CF["CashFlow API :8080<br/>(inacessível externamente)"]
-    GW -->|"rede Docker interna"| DB["Dashboard API :8080<br/>(inacessível externamente)"]
+    GW -->|"rede Docker interna"| CF["CashFlow API :8080<br/>(porta 5001 exposta apenas em dev)"]
+    GW -->|"rede Docker interna"| DB["Dashboard API :8080<br/>(porta 5002 exposta apenas em dev)"]
 ```
 
 ---
@@ -28,7 +28,9 @@ Sem rate limiting, um atacante pode:
 - Causar **DoS (Denial of Service)** sobrecarregando os serviços com requisições legítimas falsas
 - **Enumerar dados** fazendo milhares de requisições para coletar informações
 
-### Configuração no Ocelot
+### Status atual
+
+> **Nota:** O rate limiting via `RateLimitOptions` do Ocelot está **planejado mas ainda não implementado** no `ocelot.json` atual. A configuração abaixo documenta o design pretendido a ser adicionado.
 
 O Ocelot possui suporte nativo a rate limiting por rota:
 
@@ -67,7 +69,7 @@ O Ocelot possui suporte nativo a rate limiting por rota:
 }
 ```
 
-### Limites configurados por contexto
+### Limites planejados por contexto
 
 | Rota | Limite | Janela | Justificativa |
 |---|---|---|---|
@@ -76,9 +78,9 @@ O Ocelot possui suporte nativo a rate limiting por rota:
 
 > **Nota sobre o requisito não funcional do Dashboard:** O limite de 60 req/s no Gateway dá margem ao requisito de 50 req/s, com folga para lidar com picos pontuais. O RabbitMQ atua como buffer de carga adicional para o processamento assíncrono.
 
-### Headers de resposta
+### Headers de resposta (quando implementado)
 
-Quando o rate limit é aplicado, o Gateway retorna:
+Quando o rate limit é aplicado, o Gateway retornará:
 
 ```
 HTTP/1.1 429 Too Many Requests

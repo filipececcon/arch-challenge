@@ -19,7 +19,7 @@ Um requisito não funcional crítico determina que o **serviço de controle de l
 
 ## Decisão
 
-Separar o sistema em **dois bounded contexts distintos**, cada um com seu próprio backend, frontend, banco de dados e ciclo de vida de deploy:
+Separar o sistema em **dois bounded contexts distintos**, cada um com seu próprio backend, banco de dados e ciclo de vida de deploy. O frontend é uma **SPA Angular unificada** (ver ADR-010) que abrange ambos os domínios como feature modules:
 
 - **CashFlow** — responsável pelo registro e gestão de lançamentos financeiros (débitos e créditos)
 - **Dashboard** — responsável pelo processamento e exibição do consolidado diário
@@ -33,8 +33,9 @@ Separar o sistema em **dois bounded contexts distintos**, cada um com seu própr
 | Componente | Responsabilidade |
 |---|---|
 | Backend (ASP.NET Core) | API REST para criação, listagem e cancelamento de lançamentos |
-| Frontend (Angular) | Interface para o comerciante registrar débitos e créditos |
+| Feature Module Angular (`/cashflow`) | Interface para o comerciante registrar débitos e créditos |
 | Banco de dados (PostgreSQL) | Persistência dos lançamentos |
+| Read model (MongoDB) | Projeções para consultas otimizadas |
 | Publicação de eventos | Emite evento `LancamentoRegistrado` no RabbitMQ |
 
 ### Dashboard
@@ -42,9 +43,11 @@ Separar o sistema em **dois bounded contexts distintos**, cada um com seu própr
 | Componente | Responsabilidade |
 |---|---|
 | Backend (ASP.NET Core) | Consome eventos e expõe API do consolidado diário |
-| Frontend (Angular) | Interface para visualização do saldo e relatórios diários |
+| Feature Module Angular (`/dashboard`) | Interface para visualização do saldo e relatórios diários |
 | Banco de dados (PostgreSQL) | Persistência do consolidado calculado |
 | Consumo de eventos | Processa evento `LancamentoRegistrado` do RabbitMQ |
+
+> O frontend é uma **SPA Angular 19 unificada** (`services/frontend`) com os dois domínios como feature modules lazy-loaded. Não há dois projetos Angular separados — ver [ADR-010](./ADR-010-frontend-unificado-com-feature-modules.md).
 
 ---
 

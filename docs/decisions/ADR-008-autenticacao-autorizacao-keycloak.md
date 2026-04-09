@@ -65,8 +65,7 @@ Utilizar **Keycloak** como Identity Provider central para autenticação e autor
 | Recurso | Configuração |
 |---|---|
 | Realm | `cashflow` |
-| Client CashFlow Frontend | `cashflow-frontend` (public client, PKCE) |
-| Client Dashboard Frontend | `dashboard-frontend` (public client, PKCE) |
+| Client Frontend (SPA unificada) | `cashflow-frontend` (public client, PKCE) — único client para a SPA Angular |
 | Client CashFlow API | `cashflow-api` (confidential, para M2M se necessário) |
 | Client Dashboard API | `dashboard-api` (confidential, para M2M se necessário) |
 
@@ -138,7 +137,7 @@ As APIs downstream mantêm apenas a autorização por roles/claims:
 
 ### Proteção do Frontend (Angular)
 
-- Biblioteca `angular-auth-oidc-client` para gerenciar o fluxo OIDC
+- Implementação manual de OIDC/PKCE (sem biblioteca de terceiros) — serviços em `services/frontend/src/app/core/auth/`
 - Tokens armazenados em memória (não em localStorage) para prevenir XSS
 - Route guards para proteger rotas autenticadas
 - Interceptor HTTP para injeção automática do Bearer token
@@ -170,5 +169,4 @@ As APIs downstream mantêm apenas a autorização por roles/claims:
 
 - [Keycloak Documentation](https://www.keycloak.org/documentation)
 - [OAuth 2.0 — Authorization Code Flow with PKCE](https://oauth.net/2/pkce/)
-- [angular-auth-oidc-client](https://github.com/damienbod/angular-auth-oidc-client)
 - [ASP.NET Core — JWT Bearer Authentication](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/jwt-authn)

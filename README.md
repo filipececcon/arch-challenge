@@ -27,10 +27,13 @@ Os serviços se comunicam de forma **assíncrona via RabbitMQ**, garantindo que 
 |---|---|
 | API Gateway | Ocelot (ASP.NET Core) |
 | Backend | ASP.NET Core (.NET 8) |
-| Frontend | Angular 17+ |
-| Banco de dados | PostgreSQL |
+| Frontend | Angular 19 + Tailwind CSS |
+| Banco de dados relacional | PostgreSQL |
+| Banco de dados de leitura | MongoDB (read model / projeções) |
+| Cache | Redis |
 | Mensageria | RabbitMQ |
 | Autenticação | Keycloak (OAuth 2.0 / OIDC) |
+| Observabilidade | Elastic Stack (APM, Kibana), Prometheus, Grafana |
 | Containers | Docker / Docker Compose |
 
 ---
@@ -72,21 +75,34 @@ arch-challenge/
 
 ### 1. Subir a infraestrutura
 
+O `docker-compose.yml` é organizado em **profiles**. Suba apenas o que precisa:
+
+| Profile | O que sobe |
+|---------|------------|
+| `infra` | PostgreSQL, MongoDB, RabbitMQ, Redis, Keycloak |
+| `observability` | Elasticsearch, Kibana, APM Server, Prometheus, Grafana + exporters |
+| `tools` | pgAdmin (PostgreSQL UI), Mongo Express (MongoDB UI) |
+| `apps` | cashflow-api, dashboard-api, gateway, frontend (em contêiner) |
+
 ```bash
-docker-compose up -d
+# Só infraestrutura — para desenvolver as APIs fora do Docker
+docker compose --profile infra up -d
+
+# Infraestrutura + stack de observabilidade
+docker compose --profile infra --profile observability up -d
+
+# Stack completa (tudo em contêiner, com build das imagens .NET)
+docker compose --profile infra --profile observability --profile tools --profile apps up -d --build
 ```
 
-Isso irá subir:
-- PostgreSQL (porta 5432)
-- RabbitMQ (porta 5672, Management UI em http://localhost:15672)
-- Keycloak (porta 8080 — http://localhost:8080)
+> **Nota:** Elasticsearch e Kibana podem levar 1–3 minutos até ficarem *healthy* na primeira subida. Recomenda-se ao menos **4 GB de RAM** atribuídos ao Docker Desktop.
 
 ### 2. Keycloak (realm `cashflow`)
 
 Na primeira subida do container, o Keycloak importa o realm definido em [`infra/keycloak/cashflow-realm.json`](./infra/keycloak/cashflow-realm.json) (alinhado a [docs/security/authorization.md](./docs/security/authorization.md) e [ADR-008](./docs/decisions/ADR-008-autenticacao-autorizacao-keycloak.md)):
 
 - **Admin master:** http://localhost:8080 — `admin` / `admin` (apenas desenvolvimento)
-- **Realm:** `cashflow` — clients `cashflow-frontend`, `dashboard-frontend` (públicos, PKCE), `cashflow-api`, `dashboard-api` (confidenciais; secrets de dev no JSON)
+- **Realm:** `cashflow` — client `cashflow-frontend` (público, PKCE), `cashflow-api`, `dashboard-api` (confidenciais; secrets de dev no JSON)
 - **Mappers de audience** nos frontends para incluir `cashflow-api` e `dashboard-api` no JWT (como em [docs/security/authentication.md](./docs/security/authentication.md))
 
 Usuários de teste (senha **`password`** em todos):
@@ -132,10 +148,18 @@ API disponível em: http://localhost:5002
 
 ### 6. Executar o Frontend
 
+**Opção A — fora do Docker (desenvolvimento com hot reload):**
+
 ```bash
 cd services/frontend
 npm install
 ng serve
+```
+
+**Opção B — em contêiner** (via profile `apps`, junto com as APIs):
+
+```bash
+docker compose --profile infra --profile apps up -d --build
 ```
 
 Disponível em: http://localhost:4200

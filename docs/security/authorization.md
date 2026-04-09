@@ -22,10 +22,12 @@ A responsabilidade está completamente centralizada no Gateway — as APIs downs
 
 | Rota no Gateway | Método | Roles permitidas |
 |---|---|---|
-| `/cashflow/v1/transaction` | `GET` | `comerciante`, `admin` |
-| `/cashflow/v1/transaction` | `POST` | `comerciante`, `admin` |
-| `/cashflow/v1/transaction/{id}` | `GET` | `comerciante`, `admin` |
-| `/dashboard/v1/consolidate` | `GET` | `gestor`, `admin` |
+| `/cashflow/v1/transactions` | `GET` | `comerciante`, `admin` |
+| `/cashflow/v1/transactions` | `POST` | `comerciante`, `admin` |
+| `/cashflow/v1/transactions/{id}` | `GET` | `comerciante`, `admin` |
+| `/dashboard/v1/daily-balances` | `GET` | `gestor`, `admin` |
+
+> O Ocelot mapeia o prefixo `/cashflow/v1/` para `/api/` no serviço downstream. Portanto, `/cashflow/v1/transactions` → `cashflow-api:8080/api/transactions`.
 
 ---
 
@@ -92,7 +94,7 @@ Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar 
     {
       "UpstreamPathTemplate": "/cashflow/v1/{everything}",
       "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE"],
-      "DownstreamPathTemplate": "/v1/{everything}",
+      "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         { "Host": "cashflow-api", "Port": 8080 }
@@ -107,7 +109,7 @@ Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar 
     {
       "UpstreamPathTemplate": "/dashboard/v1/{everything}",
       "UpstreamHttpMethod": ["GET"],
-      "DownstreamPathTemplate": "/v1/{everything}",
+      "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         { "Host": "dashboard-api", "Port": 8080 }
@@ -121,7 +123,7 @@ Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar 
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://gateway:5000"
+    "BaseUrl": "http://localhost:5000"
   }
 }
 ```
@@ -186,7 +188,7 @@ flowchart TD
 
 As APIs downstream não revalidam autorização. Isso é um trade-off documentado consciente:
 
-**Justificativa:** As APIs só são acessíveis dentro da rede Docker interna — as portas 8080 do CashFlow e Dashboard **não são publicadas** no `docker-compose.yml`. Qualquer requisição que chegar a elas necessariamente passou pelo Gateway.
+**Justificativa:** As APIs ficam na rede Docker interna. Em desenvolvimento, as portas `5001:8080` (CashFlow) e `5002:8080` (Dashboard) são publicadas para facilitar testes diretos, mas em produção essas portas **não devem ser expostas** — todo o tráfego deve passar pelo Gateway.
 
 **Risco residual:** Um acesso direto à rede Docker (ex: comprometimento de outro container) poderia chamar as APIs sem autenticação. Em produção com Kubernetes, isso seria mitigado por Network Policies que restringem a comunicação apenas entre pods autorizados.
 
@@ -212,7 +214,7 @@ Realm Settings:
 
 | Client ID | Tipo | Fluxo | Uso |
 |---|---|---|---|
-| `cashflow-frontend` | Public | Authorization Code + PKCE | SPA Angular |
+| `cashflow-frontend` | Public | Authorization Code + PKCE | SPA Angular unificada |
 | `cashflow-api` | Confidential | Client Credentials | M2M (futuro) |
 | `dashboard-api` | Confidential | Client Credentials | M2M (futuro) |
 

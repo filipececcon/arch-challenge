@@ -34,15 +34,15 @@ flowchart TD
     end
 
     subgraph obs["Observabilidade (não exposta externamente)"]
-        FB["Fluent Bit"]
+        FB["Fluent Bit\n(planejado — ADR-011)"]
         APM["Elastic APM Server\n:8200"]
         KB["Kibana\n:5601"]
         PR["Prometheus\n:9090"]
         GF["Grafana\n:3000"]
 
-        CF & DB & GW -->|stdout JSON| FB
+        CF & DB & GW -.->|stdout JSON (planejado)| FB
         CF & DB & GW -.->|traces OTLP| APM
-        FB -->|HTTP| ES
+        FB -.->|HTTP (planejado)| ES
         APM -->|HTTP| ES
         KB -->|HTTP| ES
         CF & DB & GW -->|scrape /metrics| PR

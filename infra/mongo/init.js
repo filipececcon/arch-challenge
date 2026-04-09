@@ -7,7 +7,7 @@
  * Responsabilidades:
  *   1. Criar o banco de dados `cashflow_read` (read model / CQRS)
  *   2. Criar o usuário de aplicação `cashflow` com acesso restrito ao banco
- *   3. Criar a coleção `transactions_view` com índices otimizados para consulta
+ *   3. Criar a coleção `transactions` com índices otimizados para consulta
  *
  * Credenciais (ambiente local / desenvolvimento):
  *   Root:      root / root          (administração)
@@ -35,18 +35,18 @@ db.createUser({
 db = db.getSiblingDB('cashflow_read');
 
 // Cria a coleção explicitamente (opcional, mas deixa o schema visível)
-db.createCollection('transactions_view');
+db.createCollection('transactions');
 
 /**
- * Índices da coleção transactions_view
+ * Índices da coleção transactions
  *
  * _id:       ID da transação (string UUID) — upsert idempotente pelo OutboxWorker
  * type:      filtros por tipo (CREDIT / DEBIT)
  * createdAt: ordenação cronológica e filtros por data
  */
-db.transactions_view.createIndex({ type:      1 }, { name: 'idx_type'      });
-db.transactions_view.createIndex({ createdAt: -1 }, { name: 'idx_created_at' });
-db.transactions_view.createIndex(
+db.transactions.createIndex({ type:      1 }, { name: 'idx_type'      });
+db.transactions.createIndex({ createdAt: -1 }, { name: 'idx_created_at' });
+db.transactions.createIndex(
   { type: 1, createdAt: -1 },
   { name: 'idx_type_created_at' }
 );

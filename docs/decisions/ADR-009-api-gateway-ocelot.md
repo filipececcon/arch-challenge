@@ -9,7 +9,7 @@
 
 ## Contexto
 
-Com dois serviços backend independentes (CashFlow na porta 5001 e Dashboard na porta 5002), o sistema apresentava os seguintes problemas:
+Com dois serviços backend independentes (CashFlow e Dashboard, internamente na porta 8080 e mapeados para 5001/5002 no host em desenvolvimento), o sistema apresentava os seguintes problemas:
 
 - O frontend Angular precisava conhecer e gerenciar duas origens distintas
 - Cada serviço implementava sua própria camada de autenticação JWT de forma duplicada
@@ -31,29 +31,33 @@ Introduzir um **API Gateway** usando **Ocelot** (ASP.NET Core) como ponto único
 
 ### Fluxo atualizado
 
-```
-[Angular App]
-    │  Bearer <JWT>  →  GET /cashflow/v1/transaction
-    ↓
-[Ocelot Gateway :5000]
-    │  1. Valida JWT contra Keycloak JWKS endpoint
-    │  2. Verifica roles/claims exigidos pela rota (RouteClaimsRequirement)
-    │  3. Roteia para o serviço downstream correto
-    ↓
-[CashFlow API :5001]        [Dashboard API :5002]
-    │  /v1/transaction             /v1/consolidate
-    │  Lógica de negócio pura    Lógica de negócio pura
-    ↓
-[Response → Gateway → Angular]
+```mermaid
+sequenceDiagram
+    participant A as Angular App
+    participant G as Ocelot Gateway :5000
+    participant C as CashFlow API :8080
+    participant D as Dashboard API :8080
+
+    A->>G: Bearer <JWT> → GET /cashflow/v1/transactions
+    Note over G: 1. Valida JWT contra Keycloak JWKS endpoint
+    Note over G: 2. Verifica roles/claims (RouteClaimsRequirement)
+    Note over G: 3. Roteia para o serviço downstream correto
+    G->>C: GET /api/transactions
+    G->>D: GET /api/daily-balances
+    C-->>G: Response (lógica de negócio pura)
+    D-->>G: Response (lógica de negócio pura)
+    G-->>A: Response
 ```
 
 ### Mapeamento de rotas
 
-| Rota no Gateway | Serviço Downstream | Porta |
-|---|---|---|
-| `GET /cashflow/v1/transaction` | CashFlow API `/v1/transaction` | 5001 |
-| `POST /cashflow/v1/transaction` | CashFlow API `/v1/transaction` | 5001 |
-| `GET /dashboard/v1/consolidate?period=d-1` | Dashboard API `/v1/consolidate` | 5002 |
+| Rota no Gateway (upstream) | Serviço Downstream | Path Downstream | Porta interna |
+|---|---|---|---|
+| `GET /cashflow/v1/transactions` | CashFlow API | `/api/transactions` | 8080 |
+| `POST /cashflow/v1/transactions` | CashFlow API | `/api/transactions` | 8080 |
+| `GET /dashboard/v1/daily-balances` | Dashboard API | `/api/daily-balances` | 8080 |
+
+> O template `DownstreamPathTemplate: "/api/{everything}"` mapeia qualquer path upstream `/cashflow/v1/*` para `/api/*` no serviço downstream.
 
 ### Configuração Ocelot (`ocelot.json`)
 
@@ -63,10 +67,10 @@ Introduzir um **API Gateway** usando **Ocelot** (ASP.NET Core) como ponto único
     {
       "UpstreamPathTemplate": "/cashflow/v1/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
-      "DownstreamPathTemplate": "/v1/{everything}",
+      "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
-        { "Host": "cashflow-api", "Port": 5001 }
+        { "Host": "cashflow-api", "Port": 8080 }
       ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer",
@@ -79,10 +83,10 @@ Introduzir um **API Gateway** usando **Ocelot** (ASP.NET Core) como ponto único
     {
       "UpstreamPathTemplate": "/dashboard/v1/{everything}",
       "UpstreamHttpMethod": [ "GET" ],
-      "DownstreamPathTemplate": "/v1/{everything}",
+      "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
-        { "Host": "dashboard-api", "Port": 5002 }
+        { "Host": "dashboard-api", "Port": 8080 }
       ],
       "AuthenticationOptions": {
         "AuthenticationProviderKey": "Bearer",
@@ -110,7 +114,7 @@ Introduzir um **API Gateway** usando **Ocelot** (ASP.NET Core) como ponto único
         {
           "Name": "CashFlow API",
           "Version": "v1",
-          "Url": "http://cashflow-api:5001/swagger/v1/swagger.json"
+          "Url": "http://cashflow-api:8080/swagger/v1/swagger.json"
         }
       ]
     },
@@ -120,7 +124,7 @@ Introduzir um **API Gateway** usando **Ocelot** (ASP.NET Core) como ponto único
         {
           "Name": "Dashboard API",
           "Version": "v1",
-          "Url": "http://dashboard-api:5002/swagger/v1/swagger.json"
+          "Url": "http://dashboard-api:8080/swagger/v1/swagger.json"
         }
       ]
     }
@@ -140,7 +144,7 @@ O Swagger UI unificado fica disponível em `http://localhost:5000/swagger`, com 
 
 As APIs downstream **não implementam nenhuma lógica de autenticação ou autorização**. Todo o contexto de segurança é resolvido exclusivamente no Gateway, isolando completamente as APIs de negócio dessa responsabilidade.
 
-Esse modelo é seguro desde que as APIs downstream sejam inacessíveis diretamente de fora da rede interna. No ambiente Docker, isso é garantido **não expondo as portas 5001 e 5002** no `docker-compose.yml` — apenas o Gateway na porta 5000 é publicado externamente.
+Esse modelo é seguro desde que as APIs downstream sejam inacessíveis diretamente de fora da rede interna. Em **desenvolvimento**, as portas `5001:8080` (CashFlow) e `5002:8080` (Dashboard) são publicadas para facilitar testes, mas em **produção** apenas o Gateway na porta 5000 deve ser exposto externamente — as APIs ficam acessíveis somente pela rede interna do cluster.
 
 ---
 
@@ -199,7 +203,7 @@ Esse modelo é seguro desde que as APIs downstream sejam inacessíveis diretamen
 - CORS e rate limiting configurados uma única vez no gateway
 
 **Negativas:**
-- O gateway se torna o único ponto de verificação de segurança — **as APIs downstream devem ser inacessíveis diretamente** (portas 5001/5002 não publicadas externamente)
+- O gateway se torna o único ponto de verificação de segurança — **as APIs downstream não devem ser publicadas externamente em produção** (portas internas 8080, mapeadas 5001/5002 apenas em desenvolvimento)
 - Perde-se o _defense in depth_ no nível das APIs: um bypass no gateway expõe os serviços sem nenhuma barreira secundária
 - O gateway se torna um componente crítico de infraestrutura — em produção requer alta disponibilidade (múltiplas instâncias + load balancer)
 - Uma falha no gateway torna ambas as APIs inacessíveis pelos frontends, mesmo que os serviços downstream estejam saudáveis

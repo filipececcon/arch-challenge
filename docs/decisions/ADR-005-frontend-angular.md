@@ -8,7 +8,7 @@
 
 ## Contexto
 
-Os serviços CashFlow e Dashboard possuem interfaces de usuário distintas. Era necessário escolher o framework de frontend para construção dessas interfaces.
+Os domínios CashFlow e Dashboard precisavam de uma interface de usuário. Era necessário escolher o framework de frontend e a abordagem de estilização para a SPA unificada (ver ADR-010).
 
 A empresa solicitante do desafio já utiliza Angular como parte de sua stack frontend, tornando a escolha estratégica — além de facilitar manutenção e onboarding, garante consistência com os padrões de desenvolvimento já estabelecidos na organização.
 
@@ -20,12 +20,12 @@ Utilizar **Angular** (TypeScript) como framework de frontend, em um **único pro
 
 ### Versão e padrões adotados
 
-- Angular 17+ (com Standalone Components)
-- Angular Material como biblioteca de componentes UI
+- Angular 19 (com Standalone Components e esbuild)
+- Tailwind CSS como biblioteca de estilos utilitários
 - Angular Router para navegação SPA e lazy loading de feature modules
 - HttpClient com interceptors para injeção automática de tokens JWT
 - RxJS para gerenciamento de estado reativo
-- OIDC Client (angular-auth-oidc-client) para integração com Keycloak
+- Implementação manual de OIDC/PKCE (sem biblioteca de terceiros) para integração com Keycloak
 
 ### Organização interna do projeto
 
@@ -85,12 +85,12 @@ services/frontend/
 - Alinhamento com a stack da empresa solicitante
 - Framework opinativo que impõe estrutura e convenções — facilita manutenção em times maiores
 - TypeScript de primeira classe, reduzindo erros em tempo de execução
-- Integração nativa e bem documentada com Keycloak via `angular-auth-oidc-client`
-- Angular Material oferece componentes prontos de alta qualidade para interfaces enterprise
+- Tailwind CSS permite estilização rápida e consistente sem overhead de uma biblioteca de componentes
+- Implementação manual de OIDC/PKCE oferece controle total sobre o fluxo de autenticação sem dependências externas
 
 **Negativas:**
 - Maior verbosidade em relação a React ou Vue para componentes simples
-- Tempo de build mais lento em projetos grandes (mitigado pelo Standalone Components e esbuild no Angular 17+)
+- Tempo de build mitigado pelo Standalone Components e esbuild nativo no Angular 19
 - Bundle size inicial maior que React, mas mitigado por lazy loading por módulo/feature
 
 ---
@@ -98,5 +98,5 @@ services/frontend/
 ## Referências
 
 - [Angular Documentation](https://angular.dev/)
-- [angular-auth-oidc-client](https://github.com/damienbod/angular-auth-oidc-client)
-- [Angular Material](https://material.angular.io/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [OAuth 2.0 PKCE — RFC 7636](https://tools.ietf.org/html/rfc7636)
