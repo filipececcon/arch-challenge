@@ -16,6 +16,7 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: cashflow-mongodb
+    profiles: [infra]
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
@@ -36,6 +37,30 @@ services:
       start_period: 20s
 
   # ─────────────────────────────────────────────
+  # pgAdmin — UI administrativa do PostgreSQL
+  #
+  # Acesso: http://localhost:5050
+  #   Usuário: admin@admin.com  |  Senha: admin
+  # ─────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    container_name: cashflow-pgadmin
+    profiles: [tools]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"   # pgAdmin Web UI
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
   # Mongo Express — UI administrativa do MongoDB
   #
   # Acesso: http://localhost:8081
@@ -44,6 +69,7 @@ services:
   mongo-express:
     image: mongo-express:1.0.2
     container_name: cashflow-mongo-express
+    profiles: [tools]
     restart: unless-stopped
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
@@ -65,6 +91,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: cashflow-postgres
+    profiles: [infra]
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -89,6 +116,7 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: cashflow-rabbitmq
+    profiles: [infra]
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: rabbit
@@ -112,6 +140,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: cashflow-keycloak
+    profiles: [infra]
     restart: unless-stopped
     command: start-dev --import-realm
     environment:
@@ -139,6 +168,7 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
     container_name: cashflow-elasticsearch
+    profiles: [observability]
     restart: unless-stopped
     environment:
       - node.name=es01
@@ -185,6 +215,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.3
     container_name: cashflow-kibana
+    profiles: [observability]
     restart: unless-stopped
     environment:
       - SERVER_NAME=kibana
@@ -216,6 +247,7 @@ services:
   apm-server:
     image: docker.elastic.co/apm/apm-server:8.15.3
     container_name: cashflow-apm-server
+    profiles: [observability]
     restart: unless-stopped
     volumes:
       - ./infra/apm-server/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
@@ -234,6 +266,7 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: cashflow-postgres-exporter
+    profiles: [observability]
     restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/postgres?sslmode=disable"
@@ -252,6 +285,7 @@ services:
   mongodb-exporter:
     image: percona/mongodb_exporter:0.40
     container_name: cashflow-mongodb-exporter
+    profiles: [observability]
     restart: unless-stopped
     command:
       - "--mongodb.uri=mongodb://root:root@mongodb:27017"
@@ -271,6 +305,7 @@ services:
   redis-exporter:
     image: oliver006/redis_exporter:v1.62.0
     container_name: cashflow-redis-exporter
+    profiles: [observability]
     restart: unless-stopped
     environment:
       REDIS_ADDR: "redis://redis:6379"
@@ -289,6 +324,7 @@ services:
   elasticsearch-exporter:
     image: prometheuscommunity/elasticsearch-exporter:v1.7.0
     container_name: cashflow-elasticsearch-exporter
+    profiles: [observability]
     restart: unless-stopped
     command:
       - "--es.uri=http://elastic:changeme@elasticsearch:9200"
@@ -309,6 +345,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.2
     container_name: cashflow-prometheus
+    profiles: [observability]
     restart: unless-stopped
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -328,6 +365,7 @@ services:
   grafana:
     image: grafana/grafana:11.3.0
     container_name: cashflow-grafana
+    profiles: [observability]
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: admin
@@ -360,6 +398,7 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: cashflow-redis
+    profiles: [infra]
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -381,6 +420,7 @@ services:
       context: .
       dockerfile: services/cashflow/Dockerfile
     container_name: cashflow-api
+    profiles: [apps]
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -430,6 +470,7 @@ services:
       context: .
       dockerfile: services/dashboard/Dockerfile
     container_name: dashboard-api
+    profiles: [apps]
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -460,6 +501,7 @@ services:
       context: ./services/frontend
       dockerfile: Dockerfile
     container_name: arch-frontend
+    profiles: [apps]
     restart: unless-stopped
     ports:
       - "4200:80"
@@ -476,6 +518,7 @@ services:
       context: ./services/gateway
       dockerfile: Dockerfile
     container_name: arch-gateway
+    profiles: [apps]
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Development
@@ -502,6 +545,7 @@ volumes:
   elasticsearch_data:
   prometheus_data:
   grafana_data:
+  pgadmin_data:
 
 networks:
   cashflow-network:
