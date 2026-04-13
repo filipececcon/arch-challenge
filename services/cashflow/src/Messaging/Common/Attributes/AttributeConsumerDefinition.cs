@@ -26,5 +26,5 @@ public sealed class AttributeConsumerDefinition<TConsumer> : ConsumerDefinition<
                .OfType<IConsumerEndpointMetadata>()
                .FirstOrDefault()
            ?? throw new InvalidOperationException(
-               $"Consumer '{typeof(TConsumer).Name}' deve ter o atributo [ConsumerChannel<TChannel>].");
+               $"Consumer '{typeof(TConsumer).Name}' must have the [ConsumerChannel<TChannel>] attribute.");
 }

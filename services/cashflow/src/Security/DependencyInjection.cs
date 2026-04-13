@@ -22,7 +22,7 @@ public static class DependencyInjection
             var keycloak = configuration.GetSection("Keycloak");
 
             var authority = keycloak["Authority"]
-                ?? throw new InvalidOperationException("Configuração obrigatória: Keycloak:Authority");
+                ?? throw new InvalidOperationException("Required configuration missing: Keycloak:Authority");
 
             var audience = keycloak["Audience"] ?? "cashflow-api";
 

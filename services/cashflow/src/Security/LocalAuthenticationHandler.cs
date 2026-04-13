@@ -25,7 +25,7 @@ internal sealed class LocalAuthenticationHandler(
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, "local-dev-user"),
-            new Claim(ClaimTypes.Name, "Usuário Local"),
+            new Claim(ClaimTypes.Name, "Local User"),
             new Claim("realm_access", """{"roles":["comerciante","admin"]}"""),
             new Claim("roles", "comerciante"),
             new Claim("roles", "admin"),

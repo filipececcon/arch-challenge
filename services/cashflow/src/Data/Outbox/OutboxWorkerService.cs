@@ -33,7 +33,7 @@ public sealed class OutboxWorkerService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("[OutboxWorkerService] iniciado — polling a cada {Interval}s, batch {BatchSize}.",
+        logger.LogInformation("[OutboxWorkerService] started — polling every {Interval}s, batch size {BatchSize}.",
             _options.PollingIntervalSeconds, _options.BatchSize);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -44,13 +44,13 @@ public sealed class OutboxWorkerService(
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Erro inesperado no ciclo do OutboxWorker.");
+                logger.LogError(ex, "Unexpected error in the OutboxWorker cycle.");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken);
         }
 
-        logger.LogInformation("[OutboxWorkerService] encerrado.");
+        logger.LogInformation("[OutboxWorkerService] stopped.");
     }
 
     private async Task ProcessPendingEventsAsync(CancellationToken cancellationToken)
@@ -64,7 +64,7 @@ public sealed class OutboxWorkerService(
 
         if (pending.Count == 0) return;
 
-        logger.LogDebug("[OutboxWorker] {Count} evento(s) pendente(s) encontrado(s).", pending.Count);
+        logger.LogDebug("[OutboxWorker] {Count} pending event(s) found.", pending.Count);
 
         foreach (var outboxEvent in pending)
         {
@@ -73,7 +73,7 @@ public sealed class OutboxWorkerService(
                 if (!_options.CollectionMap.TryGetValue(outboxEvent.EventType, out var collectionName))
                 {
                     logger.LogWarning(
-                        "[OutboxWorker]: nenhuma coleção mapeada para EventName '{EventName}'. Evento {OutboxEventId} ignorado.",
+                        "[OutboxWorker] no collection mapped for EventName '{EventName}'. Event {OutboxEventId} skipped.",
                         outboxEvent.EventType, outboxEvent.Id);
                     outboxEvent.IncrementRetry();
                     continue;
@@ -103,7 +103,7 @@ public sealed class OutboxWorkerService(
                 outboxEvent.MarkProcessed();
 
                 logger.LogInformation(
-                    "[OutboxEvent] {OutboxEventId} ({EventName}) sincronizado no MongoDB com sucesso.",
+                    "[OutboxEvent] {OutboxEventId} ({EventName}) successfully synced to MongoDB.",
                     outboxEvent.Id, outboxEvent.EventType);
             }
             catch (Exception ex)
@@ -111,7 +111,7 @@ public sealed class OutboxWorkerService(
                 outboxEvent.IncrementRetry();
 
                 logger.LogWarning(ex,
-                    "Falha ao processar OutboxEvent {OutboxEventId}. Tentativa {Retry}/{MaxRetries}.",
+                    "Failed to process OutboxEvent {OutboxEventId}. Attempt {Retry}/{MaxRetries}.",
                     outboxEvent.Id, outboxEvent.RetryCount, _options.MaxRetries);
             }
         }

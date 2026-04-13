@@ -47,7 +47,7 @@ public class ExecuteTransactionHandler(
             
             await dbTransaction.CommitAsync(cancellationToken);
 
-            await taskCache.SetSuccessAsync(command.TaskId, JsonDocument.Parse(payload).RootElement, cancellationToken);
+            await taskCache.SetSuccessAsync(command.TaskId, JsonSerializer.SerializeToElement(entity), cancellationToken);
 
             await publisher.Publish(new DomainEventNotification<TransactionProcessedEvent>(@event), cancellationToken);
         }
