@@ -184,15 +184,31 @@ flowchart TD
     C --> B[Lógica de negócio pura\nsem camada de autorização]
 ```
 
-### Trade-off: ausência de defense in depth nas APIs downstream
+### Defense in depth: autenticação na API downstream
 
-As APIs downstream não revalidam autorização. Isso é um trade-off documentado consciente:
+A API CashFlow implementa sua própria camada de autenticação JWT como segunda linha de defesa. Essa camada é **independente do Gateway** — valida a assinatura, o issuer, a audience e a expiração do token diretamente contra o JWKS endpoint do Keycloak.
 
-**Justificativa:** As APIs ficam na rede Docker interna. Em desenvolvimento, as portas `5001:8080` (CashFlow) e `5002:8080` (Dashboard) são publicadas para facilitar testes diretos, mas em produção essas portas **não devem ser expostas** — todo o tráfego deve passar pelo Gateway.
+**O que a API verifica:**
+- Assinatura RSA do JWT (via JWKS do Keycloak)
+- `iss` (issuer), `aud` (audience `cashflow-api`), `exp` (expiração)
+- Presença de token válido em qualquer requisição (`[Authorize]` no controller)
 
-**Risco residual:** Um acesso direto à rede Docker (ex: comprometimento de outro container) poderia chamar as APIs sem autenticação. Em produção com Kubernetes, isso seria mitigado por Network Policies que restringem a comunicação apenas entre pods autorizados.
+**O que a API deliberadamente não verifica:**
+- Roles específicas (`comerciante`, `admin`) — essa responsabilidade permanece **exclusivamente no Gateway** via `RouteClaimsRequirement`
 
-**Mitigação futura:** Adicionar `[Authorize]` nas APIs downstream como segunda camada de verificação (defense in depth), lendo o contexto de segurança propagado pelo Gateway nos headers internos.
+**Justificativa da separação:** Verificar roles em dois lugares criaria acoplamento — qualquer mudança de role exigiria atualização tanto no `ocelot.json` quanto no controller. O Gateway é a fonte única de verdade da política de acesso (quem pode fazer o quê). A API garante apenas que toda requisição carrega um token válido, protegendo o serviço mesmo em cenários de bypass do Gateway (comprometimento de container, misconfiguration de Network Policy, etc.).
+
+```
+Acesso direto à rede interna (bypass do Gateway):
+  └─ Sem token ou token inválido ──► API: 401  ✓
+  └─ Token válido, role errada   ──► API: 200  (papel do Gateway foi bypassado —
+                                                risco residual aceito e documentado)
+```
+
+**Implementação** (`src/Api/Security/`):
+- `SecurityExtensions.cs` — registra JWT Bearer e `IClaimsTransformation`
+- `KeycloakRolesClaimsTransformation.cs` — mapeia `realm_access.roles` → claim `roles`
+- `TransactionsController` — `[Authorize]` sem roles explícitas
 
 ---
 
@@ -241,6 +257,59 @@ Roles:
 Composite roles (admin herda):
   - admin → inclui comerciante + gestor
 ```
+
+---
+
+## Autenticação desabilitada no perfil Local
+
+Para facilitar testes locais sem a necessidade de um token JWT válido, a autenticação pode ser desabilitada via configuração no perfil `Local`. Nesse modo, um handler substituto (`LocalAuthenticationHandler`) auto-autentica toda requisição com um usuário fictício, sem nenhuma chamada ao Keycloak.
+
+### Ativação
+
+Em `appsettings.Local.json`:
+
+```json
+{
+  "Security": {
+    "Disabled": true
+  }
+}
+```
+
+### Comportamento por ambiente
+
+| Ambiente | `Security:Disabled` | Autenticação |
+|---|---|---|
+| `Local` | `true` | `LocalAuthenticationHandler` — passa sempre, sem token |
+| `Development` | `false` (padrão) | JWT Bearer validado contra Keycloak |
+| `Production` | `false` (padrão) | JWT Bearer validado contra Keycloak |
+
+### Como funciona
+
+O `AddSecurityConfiguration` no projeto `Security` verifica o flag na inicialização. Se `true`, registra o `LocalAuthenticationHandler` no lugar do `JwtBearerHandler`:
+
+```csharp
+if (configuration.GetValue<bool>("Security:Disabled"))
+{
+    services
+        .AddAuthentication(LocalAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, LocalAuthenticationHandler>(...);
+}
+else
+{
+    // JWT Bearer + Keycloak
+}
+```
+
+O handler entrega ao pipeline um `ClaimsPrincipal` com as roles `comerciante` e `admin` pré-populadas, de forma que qualquer lógica que inspecione `User.IsInRole(...)` também funcione localmente sem alteração.
+
+### Garantias de segurança
+
+- O `LocalAuthenticationHandler` está no projeto `Security` e **nunca** é registrado automaticamente em outros ambientes — a ativação é estritamente opt-in via `Security:Disabled: true`
+- O `[Authorize]` permanece no controller em todos os ambientes; apenas o mecanismo de autenticação é trocado
+- Em `Development` e `Production`, o comportamento é idêntico: JWT obrigatório, validado contra o JWKS do Keycloak
+
+> **Atenção:** nunca defina `Security:Disabled: true` em `appsettings.json` ou `appsettings.Production.json`. O flag deve existir apenas em arquivos de configuração local que não são commitados (ou explicitamente em `appsettings.Local.json`, que é de uso pessoal do desenvolvedor).
 
 ---
 

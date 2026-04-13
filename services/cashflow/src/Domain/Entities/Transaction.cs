@@ -16,6 +16,6 @@ public class Transaction : Entity, IAggregateRoot
         Amount = amount;
         Description = description;
 
-        AddNotifications(new CreateTransactionContract(this));
+        AddNotifications(new EnqueueTransactionContract(this));
     }
 }

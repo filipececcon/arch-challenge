@@ -31,14 +31,9 @@ public static class SwaggerExtensions
 
     public static IApplicationBuilder UseSwaggerConfiguration(this WebApplication app)
     {
-        if (!app.Environment.IsDevelopment()) return app;
-        
-        app.UseSwagger();
-        app.UseSwaggerUI(c =>
-        {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "CashFlow API v1");
-            c.RoutePrefix = string.Empty;
-        });
+        if (app.Environment.IsProduction()) return app;
+
+        app.MapSwagger().AllowAnonymous();
 
         return app;
     }

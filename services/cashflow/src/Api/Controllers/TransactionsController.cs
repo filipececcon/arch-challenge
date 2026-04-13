@@ -1,7 +1,7 @@
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Common.Interfaces;
 using ArchChallenge.CashFlow.Application.Common.Tasks;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
 using TaskStatus = ArchChallenge.CashFlow.Application.Common.Tasks.TaskStatus;
@@ -11,6 +11,7 @@ namespace ArchChallenge.CashFlow.Api.Controllers;
 [ApiController]
 [Route("api/transactions")]
 [Produces("application/json")]
+[Authorize]
 public class TransactionsController(
     IMediator mediator,
     ITaskCacheService taskCache) : ControllerBase
@@ -27,7 +28,7 @@ public class TransactionsController(
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateTransactionCommand command, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create([FromBody] EnqueueTransactionCommand command, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(command, cancellationToken);
         

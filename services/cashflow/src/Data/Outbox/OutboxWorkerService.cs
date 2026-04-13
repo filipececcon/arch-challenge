@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 
-namespace ArchChallenge.CashFlow.Infrastructure.Data.Workers;
+namespace ArchChallenge.CashFlow.Infrastructure.Data.Outbox;
 
 /// <summary>
 /// Background service responsável por processar eventos pendentes do Outbox.
@@ -30,14 +30,10 @@ public sealed class OutboxWorkerService(
 {
     private readonly OutboxWorkerOptions _options = options.Value;
 
-    private static readonly Dictionary<string, string> CollectionMap = new()
-    {
-        { "TransactionCreated", "transactions" },
-    };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("OutboxWorkerService iniciado — polling a cada {Interval}s, batch {BatchSize}.",
+        logger.LogInformation("[OutboxWorkerService] iniciado — polling a cada {Interval}s, batch {BatchSize}.",
             _options.PollingIntervalSeconds, _options.BatchSize);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -54,7 +50,7 @@ public sealed class OutboxWorkerService(
             await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken);
         }
 
-        logger.LogInformation("OutboxWorkerService encerrado.");
+        logger.LogInformation("[OutboxWorkerService] encerrado.");
     }
 
     private async Task ProcessPendingEventsAsync(CancellationToken cancellationToken)
@@ -68,16 +64,16 @@ public sealed class OutboxWorkerService(
 
         if (pending.Count == 0) return;
 
-        logger.LogDebug("OutboxWorker: {Count} evento(s) pendente(s) encontrado(s).", pending.Count);
+        logger.LogDebug("[OutboxWorker] {Count} evento(s) pendente(s) encontrado(s).", pending.Count);
 
         foreach (var outboxEvent in pending)
         {
             try
             {
-                if (!CollectionMap.TryGetValue(outboxEvent.EventType, out var collectionName))
+                if (!_options.CollectionMap.TryGetValue(outboxEvent.EventType, out var collectionName))
                 {
                     logger.LogWarning(
-                        "OutboxWorker: nenhuma coleção mapeada para EventName '{EventName}'. Evento {EventId} ignorado.",
+                        "[OutboxWorker]: nenhuma coleção mapeada para EventName '{EventName}'. Evento {OutboxEventId} ignorado.",
                         outboxEvent.EventType, outboxEvent.Id);
                     outboxEvent.IncrementRetry();
                     continue;
@@ -89,7 +85,7 @@ public sealed class OutboxWorkerService(
                 var document = BsonDocument.Parse(outboxEvent.Payload);
 
                 // Usa o ID da transação como _id do MongoDB para garantir idempotência
-                if (document.TryGetValue("id", out var idValue))
+                if (document.TryGetValue("Id", out var idValue))
                     document["_id"] = idValue;
 
                 // Metadados do evento para rastreabilidade
@@ -107,7 +103,7 @@ public sealed class OutboxWorkerService(
                 outboxEvent.MarkProcessed();
 
                 logger.LogInformation(
-                    "OutboxEvent {EventId} ({EventName}) sincronizado no MongoDB com sucesso.",
+                    "[OutboxEvent] {OutboxEventId} ({EventName}) sincronizado no MongoDB com sucesso.",
                     outboxEvent.Id, outboxEvent.EventType);
             }
             catch (Exception ex)
@@ -115,7 +111,7 @@ public sealed class OutboxWorkerService(
                 outboxEvent.IncrementRetry();
 
                 logger.LogWarning(ex,
-                    "Falha ao processar OutboxEvent {EventId}. Tentativa {Retry}/{MaxRetries}.",
+                    "Falha ao processar OutboxEvent {OutboxEventId}. Tentativa {Retry}/{MaxRetries}.",
                     outboxEvent.Id, outboxEvent.RetryCount, _options.MaxRetries);
             }
         }

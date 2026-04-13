@@ -12,4 +12,5 @@ public interface IDomainEvent
     Guid EventId { get; }
     string EventName { get; }
     DateTime OccurredAt { get; }
+    public object Payload { get; }
 }

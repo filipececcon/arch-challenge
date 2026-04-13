@@ -1,8 +1,8 @@
+using System.Reflection;
 using ArchChallenge.CashFlow.Application.Common.Interfaces;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Consumers;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Common.Attributes;
 using Microsoft.Extensions.Configuration;
-using RabbitMQ.Client;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 
@@ -12,9 +12,11 @@ public static class DependencyInjection
     {
         services.AddScoped<IEventBus, MassTransitEventBus>();
 
+        var assembly = typeof(DependencyInjection).Assembly;
+
         services.AddMassTransit(x =>
         {
-            x.AddConsumer<ExecuteTransactionConsumer>();
+            RegisterConsumers(x, assembly);
 
             x.UsingRabbitMq((ctx, cfg) =>
             {
@@ -24,23 +26,40 @@ public static class DependencyInjection
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                // Exchange de entrada para criação de transações (Fanout é o padrão do MassTransit e compatível com Publish())
-                cfg.Message<CreateTransactionMessage>(m => m.SetEntityName("cashflow.transaction.create"));
+                foreach (var channel in DiscoverChannels(assembly))
+                    channel.Configure(cfg);
 
-                // Fila consumida pelo ExecuteTransactionConsumer
-                // ConfigureConsumeTopology = false evita o auto-bind exchange→exchange com mesmo nome (self-binding inválido no RabbitMQ)
-                cfg.ReceiveEndpoint("cashflow.transaction.create", e =>
-                {
-                    e.ConfigureConsumeTopology = false;
-                    e.ConfigureConsumer<ExecuteTransactionConsumer>(ctx);
-                });
-                
-                // Exchange de saída para downstream (dashboard, etc.)
-                cfg.Message<TransactionDoneEvent>(m => m.SetEntityName("cashflow.transaction.done"));
-                cfg.Publish<TransactionDoneEvent>(p => p.ExchangeType = ExchangeType.Topic);
+                cfg.ConfigureEndpoints(ctx);
             });
         });
 
         return services;
     }
+
+    private static void RegisterConsumers(IBusRegistrationConfigurator configurator, Assembly assembly)
+    {
+        var consumerTypes = assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                        && t.GetInterfaces().Any(i => i.IsGenericType
+                                                      && i.GetGenericTypeDefinition() == typeof(IConsumer<>)));
+
+        foreach (var consumerType in consumerTypes)
+        {
+            var hasChannelAttribute = consumerType.GetCustomAttributes(inherit: false)
+                .OfType<IConsumerEndpointMetadata>()
+                .Any();
+
+            var definitionType = hasChannelAttribute
+                ? typeof(AttributeConsumerDefinition<>).MakeGenericType(consumerType)
+                : null;
+
+            configurator.AddConsumer(consumerType, definitionType);
+        }
+    }
+
+    private static IEnumerable<IChannel> DiscoverChannels(Assembly assembly)
+        => assembly.GetTypes()
+            .Where(t => typeof(IChannel).IsAssignableFrom(t) && t is { IsInterface: false, IsAbstract: false })
+            .Select(Activator.CreateInstance)
+            .Cast<IChannel>();
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+using ArchChallenge.CashFlow.Api;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Domain.Enums;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -15,7 +16,7 @@ public class TransactionsIntegrationTests(WebApplicationFactory<Program> factory
     [Fact]
     public async Task POST_Transactions_ShouldReturn202WithTaskId()
     {
-        var command = new CreateTransactionCommand(
+        var command = new EnqueueTransactionCommand(
             TransactionType.Credit,
             100m,
             "Test");

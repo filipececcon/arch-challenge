@@ -33,6 +33,7 @@
     <ProjectReference Include="..\Messaging\Messaging.csproj" />
     <ProjectReference Include="..\Data\Data.csproj" />
     <ProjectReference Include="..\I18n\I18n.csproj" />
+    <ProjectReference Include="..\Security\Security.csproj" />
   </ItemGroup>
 
 </Project>

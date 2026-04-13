@@ -2,9 +2,9 @@ using Flunt.Validations;
 
 namespace ArchChallenge.CashFlow.Domain.Contracts;
 
-public class CreateTransactionContract : Contract<Transaction>
+public class EnqueueTransactionContract : Contract<Transaction>
 {
-    public CreateTransactionContract(Transaction transaction)
+    public EnqueueTransactionContract(Transaction transaction)
     {
         Requires()
             .IsGreaterThan(transaction.Amount, 0, nameof(transaction.Amount), 

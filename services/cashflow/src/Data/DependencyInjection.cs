@@ -1,7 +1,8 @@
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+using ArchChallenge.CashFlow.Infrastructure.Data.Outbox;
 using ArchChallenge.CashFlow.Infrastructure.Data.Repositories;
 using ArchChallenge.CashFlow.Infrastructure.Data.Transactions;
-using ArchChallenge.CashFlow.Infrastructure.Data.Workers;
+using Microsoft.Extensions.Options;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Data;
 
@@ -27,8 +28,11 @@ public static class DependencyInjection
                     .GetRequiredService<IMongoClient>()
                     .GetDatabase(mongoDatabaseName));
 
-        services.Configure<OutboxWorkerOptions>(
-            configuration.GetSection(OutboxWorkerOptions.SectionName));
+        services.AddOptions<OutboxWorkerOptions>()
+            .BindConfiguration(OutboxWorkerOptions.SectionName)
+            .ValidateOnStart();
+
+        services.AddSingleton<IValidateOptions<OutboxWorkerOptions>, OutboxWorkerOptionsValidator>();
 
         services.AddHostedService<OutboxWorkerService>();
 

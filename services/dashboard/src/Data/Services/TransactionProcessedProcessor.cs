@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArchChallenge.Dashboard.Data.Services;
 
-public class TransactionRegisteredProcessor(DashboardDbContext db) : ITransactionRegisteredProcessor
+public class TransactionProcessedProcessor(DashboardDbContext db) : ITransactionProcessedProcessor
 {
     public async Task ProcessAsync(TransactionRegisteredIntegrationEvent message, CancellationToken cancellationToken)
     {

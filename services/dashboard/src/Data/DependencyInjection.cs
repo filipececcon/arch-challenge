@@ -16,7 +16,7 @@ public static class DependencyInjection
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped<IDailyBalanceReadStore, DailyBalanceReadStore>();
-        services.AddScoped<ITransactionRegisteredProcessor, TransactionRegisteredProcessor>();
+        services.AddScoped<ITransactionProcessedProcessor, TransactionProcessedProcessor>();
 
         return services;
     }

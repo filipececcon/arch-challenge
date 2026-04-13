@@ -1,5 +1,4 @@
 using ArchChallenge.Dashboard.Messaging.Consumers;
-using ArchChallenge.Contracts.Events;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,7 +12,7 @@ public static class MessagingExtensions
     {
         services.AddMassTransit(x =>
         {
-            x.AddConsumer<TransactionRegisteredConsumer>();
+            x.AddConsumer<TransactionProcessedConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -23,18 +22,15 @@ public static class MessagingExtensions
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                cfg.Message<TransactionRegisteredIntegrationEvent>(m => m.SetEntityName("cashflow.events"));
-                cfg.Publish<TransactionRegisteredIntegrationEvent>(p => p.ExchangeType = ExchangeType.Topic);
-
-                cfg.ReceiveEndpoint("dashboard.lancamento.registrado", e =>
+                cfg.ReceiveEndpoint("dashboard.transaction.processed", e =>
                 {
                     e.ConfigureConsumeTopology = false;
                     e.Bind("cashflow.events", b =>
                     {
                         b.ExchangeType = ExchangeType.Topic;
-                        b.RoutingKey = "lancamento.registrado";
+                        b.RoutingKey = "#";
                     });
-                    e.ConfigureConsumer<TransactionRegisteredConsumer>(context);
+                    e.ConfigureConsumer<TransactionProcessedConsumer>(context);
                 });
             });
         });

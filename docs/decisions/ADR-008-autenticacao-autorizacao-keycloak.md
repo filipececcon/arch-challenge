@@ -1,6 +1,6 @@
 # ADR-008 — Autenticação e Autorização com Keycloak
 
-- **Status:** Aceito (atualizado em 2026-04-05)
+- **Status:** Aceito (atualizado em 2026-04-10)
 - **Data:** 2026-04-03
 - **Decisores:** Time de Arquitetura
 - **Relacionado a:** [ADR-009 — API Gateway com Ocelot](./ADR-009-api-gateway-ocelot.md)
@@ -50,14 +50,16 @@ Utilizar **Keycloak** como Identity Provider central para autenticação e autor
     ↓
 [Ocelot API Gateway :5000]
     |
-    | 5. Valida JWT contra a chave pública do Keycloak (JWKS endpoint)
-    |    (assinatura, issuer, audience, expiração)
-    | 6. Roteia para o serviço downstream correspondente
+    | 5. Valida JWT: assinatura RSA, issuer, audience, expiração
+    | 6. Verifica roles via RouteClaimsRequirement (comerciante, admin, gestor)
+    | 7. Encaminha requisição com o header Authorization intacto
     ↓
 [ASP.NET Core API — CashFlow ou Dashboard]
     |
-    | 7. Autoriza com base em roles/claims do JWT
-    |    (não revalida assinatura — confia no gateway)
+    | 8. Revalida JWT independentemente: assinatura, issuer, audience, expiração
+    |    (defense in depth — camada autônoma, não depende do gateway)
+    | 9. [Authorize] garante token válido; roles NÃO são verificadas aqui
+    |    (fonte única de verdade de autorização = Gateway)
 ```
 
 ### Configuração de Realm e Clients
@@ -125,15 +127,15 @@ Utilizar **Keycloak** como Identity Provider central para autenticação e autor
 
 ## Estratégia de Segurança Complementar
 
-### Proteção das APIs (ASP.NET Core)
+### Proteção das APIs (ASP.NET Core) — Defense in Depth
 
-A validação completa do JWT (assinatura, `iss`, `aud` e expiração) é feita pelo **API Gateway (Ocelot)** antes de a requisição chegar às APIs downstream — ver [ADR-009](./ADR-009-api-gateway-ocelot.md).
+A arquitetura implementa duas camadas independentes de segurança:
 
-As APIs downstream mantêm apenas a autorização por roles/claims:
+**Camada 1 — API Gateway (Ocelot):** valida o JWT (assinatura, `iss`, `aud`, `exp`) e verifica as roles exigidas por rota via `RouteClaimsRequirement`. É a fonte única de verdade da **política de autorização** (quem pode acessar o quê).
 
-- Diretiva `[Authorize(Roles = "...")]` para proteger endpoints por papel de usuário
-- Policies baseadas em claims do JWT para regras de acesso mais granulares
-- **Não revalidam** a assinatura do JWT, pois confiam que o gateway já executou essa verificação
+**Camada 2 — APIs downstream (CashFlow):** revalidam o JWT de forma autônoma via `AddJwtBearer`, sem depender do gateway. Aplicam `[Authorize]` no controller para garantir que toda requisição carrega um token válido. **Não verificam roles** — essa responsabilidade pertence exclusivamente ao Gateway, evitando acoplamento duplicado de política de acesso.
+
+Essa separação garante que um acesso direto à rede interna (bypass do gateway por comprometimento de container ou misconfiguration de Network Policy) ainda seja bloqueado com `401 Unauthorized` pela API. Ver [authorization.md](../security/authorization.md) para detalhes da implementação e justificativa.
 
 ### Proteção do Frontend (Angular)
 

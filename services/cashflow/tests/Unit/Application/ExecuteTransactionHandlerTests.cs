@@ -1,15 +1,17 @@
 using ArchChallenge.CashFlow.Application.Common.Interfaces;
 using ArchChallenge.CashFlow.Application.Common.Notifications;
 using ArchChallenge.CashFlow.Application.Common.Tasks;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
 using ArchChallenge.CashFlow.Domain.Entities;
 using ArchChallenge.CashFlow.Domain.Enums;
 using ArchChallenge.CashFlow.Domain.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n;
 using FluentAssertions;
 using MediatR;
+using Microsoft.Extensions.Localization;
 using NSubstitute;
 
 namespace ArchChallenge.CashFlow.Tests.Unit.Application;
@@ -22,6 +24,7 @@ public class ExecuteTransactionHandlerTests
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDbTransaction _dbTransaction;
     private readonly ITaskCacheService _taskCache;
+    private readonly IStringLocalizer<Messages> _localizer;
     private readonly ExecuteTransactionHandler _handler;
 
     public ExecuteTransactionHandlerTests()
@@ -29,11 +32,13 @@ public class ExecuteTransactionHandlerTests
         _repository       = Substitute.For<IWriteRepository<Transaction>>();
         _outboxRepository = Substitute.For<IOutboxRepository>();
         _publisher        = Substitute.For<IPublisher>();
-        _dbTransaction      = Substitute.For<IDbTransaction>();
+        _dbTransaction    = Substitute.For<IDbTransaction>();
         _taskCache        = Substitute.For<ITaskCacheService>();
         _unitOfWork       = Substitute.For<IUnitOfWork>();
+        _localizer        = Substitute.For<IStringLocalizer<Messages>>();
+        _localizer[Arg.Any<string>()].Returns(x => new LocalizedString((string)x[0], (string)x[0]));
         _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(_dbTransaction);
-        _handler = new ExecuteTransactionHandler(_repository, _outboxRepository, _publisher, _unitOfWork, _taskCache);
+        _handler = new ExecuteTransactionHandler(_repository, _outboxRepository, _publisher, _unitOfWork, _taskCache, _localizer);
     }
 
     [Fact]
@@ -52,7 +57,7 @@ public class ExecuteTransactionHandlerTests
         await _dbTransaction.DidNotReceive().RollbackAsync(Arg.Any<CancellationToken>());
         await _taskCache.Received(1).SetSuccessAsync(taskId, Arg.Any<object>(), Arg.Any<CancellationToken>());
         await _publisher.Received(1).Publish(
-            Arg.Is<INotification>(n => n is DomainEventNotification<TransactionDoneEvent>),
+            Arg.Is<INotification>(n => n is DomainEventNotification<TransactionProcessedEvent>),
             Arg.Any<CancellationToken>());
     }
 

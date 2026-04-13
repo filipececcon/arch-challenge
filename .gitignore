@@ -62,3 +62,4 @@ logs/
 .vscode/
 *.swp
 *~
+*.drawio.bkp

@@ -1,10 +1,8 @@
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n;
+namespace ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 
-namespace ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
-
-public class CreateTransactionValidator : AbstractValidator<CreateTransactionCommand>
+public class EnqueueTransactionValidator : AbstractValidator<EnqueueTransactionCommand>
 {
-    public CreateTransactionValidator(IStringLocalizer<Messages> localizer)
+    public EnqueueTransactionValidator(IStringLocalizer<Messages> localizer)
     {
         RuleFor(x => x.Type)
             .IsInEnum()

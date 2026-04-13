@@ -40,7 +40,7 @@ graph TB
 | Documento | Conteúdo |
 |---|---|
 | [authentication.md](./authentication.md) | Fluxo OAuth 2.0 / OIDC, tokens JWT, sessão e refresh |
-| [authorization.md](./authorization.md) | RBAC com Keycloak e Ocelot, roles, claims e mapeamento |
+| [authorization.md](./authorization.md) | RBAC com Keycloak e Ocelot, roles, claims, mapeamento e bypass para ambiente Local |
 | [api-protection.md](./api-protection.md) | Rate limiting, CORS, validação de input, proteção contra ataques |
 | [data-protection.md](./data-protection.md) | Criptografia, TLS, proteção de dados sensíveis, secrets |
 | [service-to-service.md](./service-to-service.md) | Comunicação M2M, Client Credentials, isolamento de rede |

@@ -18,8 +18,8 @@ public sealed class TaskCacheService(IDistributedCache cache) : ITaskCacheServic
     public Task SetPendingAsync(Guid taskId, CancellationToken cancellationToken = default)
         => SetAsync(taskId, new TaskResult { TaskId = taskId, Status = TaskStatus.Pending }, cancellationToken);
 
-    public Task SetSuccessAsync(Guid taskId, object data, CancellationToken cancellationToken = default)
-        => SetAsync(taskId, new TaskResult { TaskId = taskId, Status = TaskStatus.Success, Data = data }, cancellationToken);
+    public Task SetSuccessAsync(Guid taskId, JsonElement data, CancellationToken cancellationToken = default)
+        => SetAsync(taskId, new TaskResult { TaskId = taskId, Status = TaskStatus.Success, Payload = data }, cancellationToken);
 
     public Task SetFailureAsync(Guid taskId, string error, CancellationToken cancellationToken = default)
         => SetAsync(taskId, new TaskResult { TaskId = taskId, Status = TaskStatus.Failure, Error = error }, cancellationToken);

@@ -1,8 +1,8 @@
 using ArchChallenge.CashFlow.Domain.Enums;
 
-namespace ArchChallenge.CashFlow.Application.Transactions.Commands.CreateTransaction;
+namespace ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 
-public record CreateTransactionMessage(
+public record EnqueueTransactionMessage(
     Guid TaskId,
     TransactionType Type,
     decimal Amount,
