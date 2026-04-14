@@ -4,20 +4,20 @@ using Microsoft.Extensions.Options;
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Outbox;
 
 /// <summary>
-/// Valida no startup que todos os eventos de domínio concretos (subclasses de <see cref="DomainEvent"/>)
-/// possuem entrada correspondente em <see cref="OutboxWorkerOptions.CollectionMap"/>.
+/// Valida no startup que todos os eventos de aplicação concretos (tipos concretos cujo nome
+/// termina em "Event" no namespace <c>ArchChallenge.CashFlow.Application</c>) possuem entrada
+/// correspondente em <see cref="OutboxWorkerOptions.CollectionMap"/>.
 ///
 /// Garante que nenhum evento chegue ao <see cref="OutboxWorkerService"/> sem ter uma
 /// coleção MongoDB mapeada, evitando descarte silencioso de eventos por falta de configuração.
 ///
-/// A descoberta usa a convenção de nomenclatura do <see cref="DomainEvent"/>:
-/// <c>GetType().Name.Replace("Event", "")</c>.
+/// A descoberta usa a convenção de nomenclatura: <c>TypeName.Replace("Event", "")</c>.
 /// </summary>
 internal sealed class OutboxWorkerOptionsValidator : IValidateOptions<OutboxWorkerOptions>
 {
     public ValidateOptionsResult Validate(string? name, OutboxWorkerOptions options)
     {
-        var missing = DiscoverDomainEventNames()
+        var missing = DiscoverEventNames()
             .Where(eventName => !options.CollectionMap.ContainsKey(eventName))
             .Order()
             .ToList();
@@ -29,7 +29,7 @@ internal sealed class OutboxWorkerOptionsValidator : IValidateOptions<OutboxWork
                  "Add the EventType → MongoDB collection mapping in appsettings.json.");
     }
 
-    private static IEnumerable<string> DiscoverDomainEventNames() =>
+    private static IEnumerable<string> DiscoverEventNames() =>
         AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a =>
             {
@@ -37,6 +37,7 @@ internal sealed class OutboxWorkerOptionsValidator : IValidateOptions<OutboxWork
                 catch (ReflectionTypeLoadException ex) { return ex.Types.OfType<Type>(); }
             })
             .Where(t => t is { IsAbstract: false, IsClass: true }
-                     && typeof(DomainEvent).IsAssignableFrom(t))
+                     && t.Name.EndsWith("Event", StringComparison.Ordinal)
+                     && t.Namespace?.StartsWith("ArchChallenge.CashFlow.Application") == true)
             .Select(t => t.Name.Replace("Event", string.Empty));
 }

@@ -35,6 +35,13 @@ public static class SwaggerExtensions
 
         app.MapSwagger().AllowAnonymous();
 
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "CashFlow API v1");
+            c.RoutePrefix = string.Empty;
+        });
+
+        
         return app;
     }
 }

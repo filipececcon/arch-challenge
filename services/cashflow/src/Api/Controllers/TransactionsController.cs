@@ -1,10 +1,6 @@
-using System.Text.Json;
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
-using ArchChallenge.CashFlow.Application.Common.Tasks;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
-using TaskStatus = ArchChallenge.CashFlow.Application.Common.Tasks.TaskStatus;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 
@@ -12,66 +8,27 @@ namespace ArchChallenge.CashFlow.Api.Controllers;
 [Route("api/transactions")]
 [Produces("application/json")]
 [Authorize]
-public class TransactionsController(
-    IMediator mediator,
-    ITaskCacheService taskCache) : ControllerBase
+public class TransactionsController(IMediator mediator) : ControllerBase
 {
-    private static readonly JsonSerializerOptions SseJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     /// <summary>
     /// Valida e enfileira o processamento de uma transação financeira.
     /// Retorna um taskId para acompanhamento assíncrono via SSE.
+    /// Envie o header <c>Idempotency-Key</c> (UUID) para garantir que retries
+    /// do cliente não gerem transações duplicadas.
     /// </summary>
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] EnqueueTransactionCommand command, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(
+        [FromBody] EnqueueTransactionCommand command,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(command, cancellationToken);
-        
+        var result = await mediator.Send(
+            command with { IdempotencyKey = idempotencyKey },
+            cancellationToken);
+
         return Accepted(new { result.TaskId });
-    }
-
-    /// <summary>
-    /// Stream SSE que acompanha o status de processamento de uma transação enfileirada.
-    /// Faz polling no cache a cada 500ms até obter um estado final (Success ou Failure).
-    /// </summary>
-    [HttpGet("tasks/{taskId:guid}/status")]
-    [Produces("text/event-stream")]
-    public async Task GetTaskStatus(Guid taskId, CancellationToken cancellationToken)
-    {
-        Response.Headers.Append("Content-Type", "text/event-stream");
-        Response.Headers.Append("Cache-Control", "no-cache");
-        Response.Headers.Append("Connection", "keep-alive");
-        Response.Headers.Append("X-Accel-Buffering", "no");
-
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var result = await taskCache.GetAsync(taskId, cancellationToken);
-
-                if (result is null)
-                {
-                    await WriteSseAsync(new { status = "not_found", taskId }, cancellationToken);
-                    return;
-                }
-
-                await WriteSseAsync(result, cancellationToken);
-
-                if (result.Status != TaskStatus.Pending)
-                    return;
-
-                await Task.Delay(500, cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // cliente desconectou — encerra silenciosamente
-        }
     }
 
     /// <summary>Retorna uma transação pelo seu identificador.</summary>
@@ -91,12 +48,5 @@ public class TransactionsController(
     {
         var result = await mediator.Send(new ListTransactionsQuery(), cancellationToken);
         return Ok(result);
-    }
-
-    private async Task WriteSseAsync(object payload, CancellationToken cancellationToken)
-    {
-        var json = JsonSerializer.Serialize(payload, SseJsonOptions);
-        await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
-        await Response.Body.FlushAsync(cancellationToken);
     }
 }

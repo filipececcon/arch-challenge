@@ -2,4 +2,5 @@
 -- Referência: ADR-006
 
 CREATE DATABASE cashflow_db;
+CREATE DATABASE dashboard_db;
 CREATE DATABASE keycloak_db;

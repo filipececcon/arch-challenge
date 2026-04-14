@@ -27,20 +27,26 @@ O contrato dos eventos será documentado explicitamente nos ADRs e mantido alinh
 
 ### Contrato documentado do evento principal
 
+O evento publicado na exchange `cashflow.events` segue a estrutura base de `DomainEvent`. O campo `payload` é o JSON serializado da entidade `Transaction`:
+
 ```json
 {
   "eventId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "eventType": "LancamentoRegistrado",
+  "eventName": "TransactionProcessed",
   "occurredAt": "2026-04-03T10:00:00Z",
   "payload": {
-    "lancamentoId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "tipo": "CREDITO",
-    "valor": 150.00,
-    "descricao": "Venda à vista",
-    "dataLancamento": "2026-04-03"
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "type": "Credit",
+    "amount": 150.00,
+    "description": "Venda à vista",
+    "createdAt": "2026-04-03T10:00:00Z",
+    "updatedAt": "2026-04-03T10:00:00Z",
+    "active": true
   }
 }
 ```
+
+O contrato de integração entre os serviços é definido pelo pacote compartilhado `ArchChallenge.Contracts` (referenciado pelo Dashboard), que expõe o tipo `TransactionRegisteredIntegrationEvent`.
 
 ### Convenções adotadas
 
@@ -114,8 +120,8 @@ Para evitar breaking changes sem schema registry, adotamos as seguintes convenç
 
 1. Novos campos devem ser opcionais e ter valor default
 2. Campos existentes não podem ser removidos ou ter o tipo alterado
-3. Mudanças incompatíveis devem gerar um novo `eventType` (ex: `LancamentoRegistrado.v2`)
-4. O campo `eventType` na mensagem permite que o consumidor ignore eventos desconhecidos
+3. Mudanças incompatíveis devem gerar um novo `eventName` (ex: `TransactionProcessed.v2`)
+4. O campo `eventName` na mensagem permite que o consumidor ignore eventos desconhecidos
 
 ---
 

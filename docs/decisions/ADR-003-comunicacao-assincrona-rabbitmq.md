@@ -24,42 +24,43 @@ Adicionalmente, o Dashboard deve suportar **50 requisições por segundo** com n
 
 Adotar **comunicação assíncrona baseada em eventos** utilizando **RabbitMQ** como broker de mensagens.
 
-O CashFlow publica o evento `LancamentoRegistrado` em uma exchange do RabbitMQ após persistir o lançamento com sucesso. O Dashboard consome essa fila de forma independente e atualiza o consolidado diário.
+O CashFlow publica o evento `TransactionProcessed` em uma exchange do RabbitMQ após persistir a transação com sucesso. O Dashboard consome essa fila de forma independente e atualiza o consolidado diário.
 
 ### Topologia de mensagens
 
-```
-[CashFlow API]
-     |
-     | publish
-     ↓
-[Exchange: cashflow.events]
-     |
-     | routing key: lancamento.registrado
-     ↓
-[Queue: dashboard.lancamento.registrado]
-     |
-     | consume
-     ↓
-[Dashboard API]
+```mermaid
+sequenceDiagram
+    participant C as CashFlow API
+    participant E as Exchange: cashflow.events (Topic)
+    participant Q as Queue: dashboard.transaction.processed
+    participant D as Dashboard API
+
+    C->>E: publish TransactionProcessed
+    E->>Q: routing key: # (wildcard)
+    Q->>D: consume
 ```
 
 ### Contrato do evento
 
+O evento publicado na exchange `cashflow.events` segue a estrutura de `DomainEvent`. O campo `payload` contém o JSON serializado da entidade `Transaction`:
+
 ```json
 {
-  "eventId": "uuid-v4",
-  "eventType": "LancamentoRegistrado",
+  "eventId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "eventName": "TransactionProcessed",
   "occurredAt": "2026-04-03T10:00:00Z",
   "payload": {
-    "lancamentoId": "uuid-v4",
-    "tipo": "CREDITO | DEBITO",
-    "valor": 150.00,
-    "descricao": "Venda à vista",
-    "dataLancamento": "2026-04-03"
+    "Id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "Type": 1,
+    "Amount": 150.00,
+    "Description": "Venda à vista",
+    "CreatedAt": "2026-04-03T10:00:00Z",
+    "UpdatedAt": "2026-04-03T10:00:00Z",
+    "Active": true
   }
 }
 ```
+> **Legenda de `Type`:** `1` = Credit, `2` = Debit.
 
 ---
 

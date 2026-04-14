@@ -50,7 +50,7 @@ Aprofunda a visão interna dos serviços de negócio (CashFlow, Dashboard e Gate
 
 **O que este diagrama mostra:**
 - Camadas internas das APIs (Controllers, Services, Repositories, Domain)
-- Publicação e consumo de eventos via RabbitMQ (`LancamentoRegistrado`)
+- Publicação e consumo de eventos via RabbitMQ (`TransactionProcessed` — exchange `cashflow.events`, fila `dashboard.transaction.processed`)
 - Integração do Gateway com o Keycloak para validação de JWT
 - Separação clara entre os bounded contexts CashFlow e Dashboard
 

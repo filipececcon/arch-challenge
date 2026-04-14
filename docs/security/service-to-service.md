@@ -91,14 +91,14 @@ graph TD
     CF["CashFlow API<br/>(cashflow-service)"]
 
     subgraph MQ["RabbitMQ :5672"]
-        EX["Exchange: cashflow.events"]
-        Q["Queue: dashboard.lancamento.registrado<br/>durable · ack manual · DLQ"]
+        EX["Exchange: cashflow.events (Topic)"]
+        Q["Queue: dashboard.transaction.processed<br/>durable · ack manual · DLQ"]
     end
 
     DA["Dashboard API<br/>(dashboard-service)"]
 
-    CF -->|"publish(LancamentoRegistrado)<br/>amqp://rabbit@rabbitmq:5672"| EX
-    EX -->|"routing key: lancamento.registrado"| Q
+    CF -->|"publish(TransactionProcessed)<br/>amqp://rabbit@rabbitmq:5672"| EX
+    EX -->|"routing key: # (wildcard)"| Q
     Q -->|"consume"| DA
     DA -.->|"ack (após processamento bem-sucedido)"| Q
 ```
@@ -187,11 +187,22 @@ sequenceDiagram
     participant G as Ocelot Gateway
     participant A as CashFlow API
 
-    C->>G: GET /cashflow/v1/... + Authorization: Bearer &lt;JWT&gt;
-    Note over G: Valida JWT (assinatura, expiração)<br/>Extrai claims: sub, roles
-    G->>A: Requisição roteada + headers propagados
-    Note right of G: X-User-Id: &lt;sub do JWT&gt;<br/>X-User-Roles: comerciante<br/>X-Correlation-Id: &lt;uuid gerado no gateway&gt;
-    Note over A: Lê X-User-Id → associa lançamento ao usuário<br/>Lê X-Correlation-Id → correlaciona logs<br/>NÃO revalida o token — confia nos headers do Gateway
+    C->>G: GET /cashflow/v1/... + Authorization: Bearer JWT
+
+    Note over G: Valida assinatura e expiração do JWT
+    Note over G: Extrai claims: sub, roles
+
+    G->>A: Requisição roteada
+
+    Note over G,A: Headers propagados pelo Gateway
+    Note right of A: X-User-Id (sub do JWT)
+    Note right of A: X-User-Roles: comerciante
+    Note right of A: X-Correlation-Id: uuid
+
+    Note over A: Associa lançamento ao X-User-Id
+    Note over A: Correlaciona logs pelo X-Correlation-Id
+    Note over A: Não revalida o token
+
     A-->>G: Resposta
     G-->>C: Resposta
 ```

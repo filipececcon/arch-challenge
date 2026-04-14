@@ -14,7 +14,7 @@ Para conexão via cliente externo (DBeaver, mongosh, redis-cli, etc.):
 |---|---|---|---|---|
 | PostgreSQL | `localhost:5432` | `postgres` | `postgres` | Bancos `cashflow_db`, `dashboard_db` e `keycloak_db` criados pelo `init.sql` |
 | MongoDB (root) | `localhost:27017` | `root` | `root` | Acesso administrativo |
-| MongoDB (app) | `localhost:27017` | `cashflow` | `cashflow` | Banco `cashflow_read`, coleção `transactions_view` |
+| MongoDB (app) | `localhost:27017` | `cashflow` | `cashflow` | Banco `cashflow_read`, coleção `transactions` |
 | Redis | `localhost:6379` | — | — | Sem autenticação neste Compose |
 | RabbitMQ (AMQP) | `localhost:5672` | `rabbit` | `rabbit` | Protocolo AMQP — para a Management UI ver tabela abaixo |
 

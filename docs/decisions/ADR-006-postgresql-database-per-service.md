@@ -29,10 +29,10 @@ Utilizar **PostgreSQL** como banco de dados relacional para ambos os serviços, 
 
 ### Distribuição dos bancos
 
-| Serviço | Banco | Principais tabelas |
-|---|---|---|
-| CashFlow | `cashflow_db` | `lancamentos` |
-| Dashboard | `dashboard_db` | `consolidados_diarios` |
+| Serviço | Banco | Schema | Principais tabelas |
+|---|---|---|---|
+| CashFlow | `cashflow_db` | `public` | `TB_TRANSACTION`, `TB_OUTBOX_EVENT` |
+| Dashboard | `dashboard_db` | `dashboard` | `daily_consolidations`, `processed_integration_events` |
 
 Em ambiente de desenvolvimento (docker-compose), ambos os bancos podem coexistir na mesma instância PostgreSQL em schemas separados. Em produção, recomenda-se instâncias separadas.
 

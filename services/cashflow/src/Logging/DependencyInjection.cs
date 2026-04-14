@@ -34,8 +34,6 @@ public static class DependencyInjection
                 loggerConfiguration.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(nodeUri))
                 {
                     IndexFormat = indexFormat,
-                    AutoRegisterTemplate = true,
-                    DetectElasticsearchVersion = true,
                     ModifyConnectionSettings = conn => string.IsNullOrEmpty(username)
                         ? conn
                         : conn.BasicAuthentication(username, password)

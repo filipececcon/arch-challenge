@@ -1,12 +1,10 @@
 using System.Text.Json;
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
-using ArchChallenge.CashFlow.Application.Common.Notifications;
 using ArchChallenge.CashFlow.Application.Common.Tasks;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Events;
+using ArchChallenge.CashFlow.Application.Transactions.Events.TransactionProcessed;
 using ArchChallenge.CashFlow.Domain.Entities;
 using ArchChallenge.CashFlow.Domain.Enums;
-using ArchChallenge.CashFlow.Domain.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n;
@@ -58,7 +56,7 @@ public class ExecuteTransactionHandlerTests
         await _dbTransaction.DidNotReceive().RollbackAsync(Arg.Any<CancellationToken>());
         await _taskCache.Received(1).SetSuccessAsync(taskId, Arg.Any<JsonElement>(), Arg.Any<CancellationToken>());
         await _publisher.Received(1).Publish(
-            Arg.Is<INotification>(n => n is DomainEventNotification<TransactionProcessedEvent>),
+            Arg.Is<INotification>(n => n is TransactionProcessedEvent),
             Arg.Any<CancellationToken>());
     }
 
