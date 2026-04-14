@@ -1,6 +1,6 @@
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransactions;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
-using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 
@@ -33,7 +33,7 @@ public class TransactionsController(IMediator mediator) : ControllerBase
 
     /// <summary>Retorna uma transação pelo seu identificador.</summary>
     [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(TransactionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GetTransactionByIdResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -41,12 +41,16 @@ public class TransactionsController(IMediator mediator) : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    /// <summary>Lista todas as transações.</summary>
+    /// <summary>
+    /// Lista transações (read model Mongo) com filtros opcionais na query string:
+    /// <c>type</c>, <c>active</c>, <c>minAmount</c>, <c>maxAmount</c>, <c>createdFrom</c>, <c>createdTo</c>.
+    /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<TransactionDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(GetAllTransactionsResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> List([FromQuery] GetAllTransactionsQuery query, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new ListTransactionsQuery(), cancellationToken);
+        var result = await mediator.Send(query, cancellationToken);
         return Ok(result);
     }
 }

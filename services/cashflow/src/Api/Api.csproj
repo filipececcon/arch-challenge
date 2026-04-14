@@ -27,12 +27,21 @@
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.1.7" />
   </ItemGroup>
 
+  <!-- Copia o XML de documentação do Application para o output da Api (Swagger IncludeXmlComments). -->
+  <Target Name="CopyApplicationXmlToOutput" AfterTargets="Build">
+    <PropertyGroup>
+      <_ApplicationXml>$(MSBuildProjectDirectory)\..\Application\bin\$(Configuration)\$(TargetFramework)\ArchChallenge.CashFlow.Application.xml</_ApplicationXml>
+    </PropertyGroup>
+    <Copy SourceFiles="$(_ApplicationXml)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('$(_ApplicationXml)')" />
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\Application\Application.csproj" />
     <ProjectReference Include="..\Caching\Caching.csproj" />
     <ProjectReference Include="..\Logging\Logging.csproj" />
     <ProjectReference Include="..\Messaging\Messaging.csproj" />
-    <ProjectReference Include="..\Data\Data.csproj" />
+    <ProjectReference Include="..\Relational\Relational.csproj" />
+    <ProjectReference Include="..\Documents\Documents.csproj" />
     <ProjectReference Include="..\I18n\I18n.csproj" />
     <ProjectReference Include="..\Security\Security.csproj" />
   </ItemGroup>

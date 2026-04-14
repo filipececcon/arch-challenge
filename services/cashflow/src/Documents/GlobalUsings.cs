@@ -1,0 +1,10 @@
+global using System.Collections.Concurrent;
+global using System.Linq.Expressions;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using MongoDB.Driver;
+global using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+global using ArchChallenge.CashFlow.Domain.Shared.Pagination;
+global using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Registries;
+global using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Repositories;
+global using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Resolvers;

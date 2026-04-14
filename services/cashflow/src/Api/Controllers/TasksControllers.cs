@@ -17,7 +17,7 @@ public class TasksControllers(ITaskCacheService taskCache) : ControllerBase
     /// Stream SSE que acompanha o status de processamento de uma transação enfileirada.
     /// Faz polling no cache a cada 500ms até obter um estado final (Success ou Failure).
     /// </summary>
-    [HttpGet("{taskId:guid}/status")]
+    [HttpGet("{taskId:guid}")]
     [Produces("text/event-stream")]
     public async Task GetTaskStatus(Guid taskId, CancellationToken cancellationToken)
     {

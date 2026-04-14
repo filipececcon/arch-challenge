@@ -1,3 +1,4 @@
+using ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransactions;
 using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -18,10 +19,16 @@ public static class SwaggerExtensions
                 Description = "Financial transaction management API (credits and debits)."
             });
 
-            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-            if (File.Exists(xmlPath))
-                c.IncludeXmlComments(xmlPath);
+            var apiXml = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var apiXmlPath = Path.Combine(AppContext.BaseDirectory, apiXml);
+            if (File.Exists(apiXmlPath))
+                c.IncludeXmlComments(apiXmlPath);
+
+            // Comentários dos DTOs/queries na Application (ex.: filtros GET alinhados ao FluentValidation).
+            var applicationXml = $"{typeof(GetAllTransactionsQuery).Assembly.GetName().Name}.xml";
+            var applicationXmlPath = Path.Combine(AppContext.BaseDirectory, applicationXml);
+            if (File.Exists(applicationXmlPath))
+                c.IncludeXmlComments(applicationXmlPath);
         });
 
         services.AddFluentValidationRulesToSwagger();

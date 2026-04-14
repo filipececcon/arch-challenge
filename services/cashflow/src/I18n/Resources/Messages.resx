@@ -54,5 +54,11 @@
   <data name="Validation_Transaction_NotFound" xml:space="preserve">
     <value>Transaction '{0}' not found.</value>
   </data>
+  <data name="Validation_GetAll_AmountRange" xml:space="preserve">
+    <value>minAmount must be less than or equal to maxAmount.</value>
+  </data>
+  <data name="Validation_GetAll_CreatedAtRange" xml:space="preserve">
+    <value>createdFrom must be less than or equal to createdTo.</value>
+  </data>
 </root>
 

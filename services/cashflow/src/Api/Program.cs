@@ -1,8 +1,3 @@
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Caching;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Security;
-
 Serilog.Debugging.SelfLog.Enable(msg => Console.Error.WriteLine($"[SERILOG INTERNAL] {msg}"));
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,7 +12,8 @@ builder.Services.AddSecurityConfiguration(builder.Configuration);
 builder.Services.AddCaching(builder.Configuration);
 builder.Services.AddHealthChecksConfiguration(builder.Configuration);
 builder.Services.AddApplication();
-builder.Services.AddData(builder.Configuration);
+builder.Services.AddRelationalData(builder.Configuration);
+builder.Services.AddDocumentsData(builder.Configuration);
 builder.Services.AddMessaging(builder.Configuration);
 
 var app = builder.Build();

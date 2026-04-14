@@ -1,25 +1,36 @@
-using ArchChallenge.CashFlow.Application.Transactions.Queries.ListTransactions;
+using ArchChallenge.CashFlow.Application.Transactions.Events.TransactionProcessed;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
+using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 
-public class GetTransactionByIdHandler(IReadRepository<Transaction> repository)
-    : IRequestHandler<GetTransactionByIdQuery, TransactionDto?>
+/// <summary>
+/// Leitura híbrida: Mongo (read model) primeiro; se não houver documento,
+/// verifica outbox pendente para o agregado e, em caso afirmativo, lê na base relacional.
+/// </summary>
+public sealed class GetTransactionByIdHandler(
+    IDocumentsReadRepository<TransactionDocument> documentsRepository,
+    IReadRepository<Transaction>                relationalRepository,
+    IOutboxRepository                           outboxRepository)
+    : IRequestHandler<GetTransactionByIdQuery, GetTransactionByIdResult?>
 {
-    public async Task<TransactionDto?> Handle(GetTransactionByIdQuery request, CancellationToken cancellationToken)
+    public async Task<GetTransactionByIdResult?> Handle(GetTransactionByIdQuery request, CancellationToken cancellationToken)
     {
+        var document = await documentsRepository.FindOneByIdAsync(request.Id, cancellationToken);
+
+        if (document is not null) return GetTransactionByIdFactory.Create(document);
+
+        var hasPendingSync = await outboxRepository.HasPendingForAggregateAsync(
+            TransactionProcessedMessage.EventName,
+            request.Id,
+            cancellationToken);
+
+        if (!hasPendingSync) return null;
+
         var spec = new TransactionByIdSpec(request.Id);
-        var transaction = await repository.FirstOrDefaultAsync(spec, cancellationToken);
 
-        if (transaction is null)
-            return null;
+        var entities = await relationalRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
-        return new TransactionDto(
-            transaction.Id,
-            transaction.Type.ToString(),
-            transaction.Amount,
-            transaction.Description,
-            transaction.CreatedAt,
-            transaction.Active);
+        return entities is null ? null : GetTransactionByIdFactory.Create(entities);
     }
 }

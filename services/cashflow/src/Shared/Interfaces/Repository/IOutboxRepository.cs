@@ -23,6 +23,16 @@ public interface IOutboxRepository
 
     /// <summary>Persiste as alterações (markProcessed / incrementRetry).</summary>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Indica se existe evento não processado do <paramref name="eventType"/> cujo
+    /// <see cref="OutboxEvent.Payload"/> referencia o agregado (ex.: mesmo <c>id</c> no JSON).
+    /// Usado em leituras híbridas Mongo → outbox → relacional.
+    /// </summary>
+    Task<bool> HasPendingForAggregateAsync(
+        string            eventType,
+        Guid              aggregateId,
+        CancellationToken cancellationToken = default);
 }
 
 

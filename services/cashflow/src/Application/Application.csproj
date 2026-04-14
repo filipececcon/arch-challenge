@@ -17,6 +17,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>ArchChallenge.CashFlow.Application</RootNamespace>
     <AssemblyName>ArchChallenge.CashFlow.Application</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
 </Project>

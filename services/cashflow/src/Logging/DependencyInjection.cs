@@ -1,8 +1,10 @@
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging.Filters;
 using Elastic.Apm.SerilogEnricher;
 using Elasticsearch.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using Serilog.Events;
 using Serilog.Sinks.Elasticsearch;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
@@ -16,6 +18,9 @@ public static class DependencyInjection
             loggerConfiguration
                 .ReadFrom.Configuration(configuration)
                 .ReadFrom.Services(provider)
+                .Filter.ByExcluding(logEvent =>
+                    logEvent.Level <= LogEventLevel.Information
+                    && SerilogEfOutboxFilters.ExcludeTaggedOutboxWorkerSql(logEvent))
                 .Enrich.FromLogContext()
                 .Enrich.WithMachineName()
                 .Enrich.WithProcessId()
@@ -25,20 +30,19 @@ public static class DependencyInjection
             var esSection = configuration.GetSection("ElasticsearchLogging");
             var nodeUri = esSection["NodeUri"];
 
-            if (!string.IsNullOrEmpty(nodeUri))
-            {
-                var username = esSection["Username"];
-                var password = esSection["Password"];
-                var indexFormat = esSection["IndexFormat"] ?? "logs-{0:yyyy.MM.dd}";
+            if (string.IsNullOrEmpty(nodeUri)) return;
+            
+            var username = esSection["Username"];
+            var password = esSection["Password"];
+            var indexFormat = esSection["IndexFormat"] ?? "logs-{0:yyyy.MM.dd}";
 
-                loggerConfiguration.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(nodeUri))
-                {
-                    IndexFormat = indexFormat,
-                    ModifyConnectionSettings = conn => string.IsNullOrEmpty(username)
-                        ? conn
-                        : conn.BasicAuthentication(username, password)
-                });
-            }
+            loggerConfiguration.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(nodeUri))
+            {
+                IndexFormat = indexFormat,
+                ModifyConnectionSettings = conn => string.IsNullOrEmpty(username)
+                    ? conn
+                    : conn.BasicAuthentication(username, password)
+            });
         });
 
         services.AddAllElasticApm();
