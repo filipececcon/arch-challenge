@@ -87,7 +87,20 @@ Detalha os componentes que compõem a plataforma de observabilidade, organizada 
 
 Diagrama de classes gerado diretamente pela IDE, detalhando a estrutura de código de cada componente.
 
-> Em elaboração — será adicionado por serviço à medida que a implementação avançar.
+A documentação detalhada de cada camada do serviço **Cashflow API** está disponível em:
+
+**[cashflow/ — Arquitetura por Camadas](./cashflow/README.md)**
+
+| Camada | Arquivo |
+|--------|---------|
+| Api | [layer-01-api.md](./cashflow/layer-01-api.md) |
+| Application | [layer-02-application.md](./cashflow/layer-02-application.md) |
+| Domain + Shared | [layer-03-domain.md](./cashflow/layer-03-domain.md) |
+| Infrastructure.Data.Relational | [layer-04-relational.md](./cashflow/layer-04-relational.md) |
+| Infrastructure.Data.Documents | [layer-05-documents.md](./cashflow/layer-05-documents.md) |
+| Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./cashflow/layer-06-messaging.md) |
+| Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./cashflow/layer-07-caching.md) |
+| Infrastructure.CrossCutting.Security | [layer-08-security.md](./cashflow/layer-08-security.md) |
 
 ---
 
