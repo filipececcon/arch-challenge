@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "OutboxAudit": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Local"
+      }
+    }
+  }
+}
+

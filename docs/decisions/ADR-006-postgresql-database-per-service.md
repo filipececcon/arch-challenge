@@ -29,12 +29,14 @@ Utilizar **PostgreSQL** como banco de dados relacional para ambos os serviços, 
 
 ### Distribuição dos bancos
 
-| Serviço | Banco | Schema | Principais tabelas |
+| Serviço | Banco | Schemas | Principais tabelas |
 |---|---|---|---|
-| CashFlow | `cashflow_db` | `public` | `TB_TRANSACTION`, `TB_OUTBOX_EVENT` |
-| Dashboard | `dashboard_db` | `dashboard` | `daily_consolidations`, `processed_integration_events` |
+| CashFlow | `cashflow_db` | `public`, `outbox`, `control` | `TB_TRANSACTION`, `TB_OUTBOX_EVENT`, `TB_OUTBOX_AUDIT_EVENT`, `__EFMigrationsHistory` |
+| Dashboard | `dashboard_db` | `public` | `daily_consolidations`, `processed_integration_events` |
 
-Em ambiente de desenvolvimento (docker-compose), ambos os bancos podem coexistir na mesma instância PostgreSQL em schemas separados. Em produção, recomenda-se instâncias separadas.
+O banco `cashflow_db` utiliza schemas separados por responsabilidade para permitir controle de acesso granular por role — detalhado em [ADR-015 — Segregação de Schemas PostgreSQL](./ADR-015-segregacao-schemas-postgresql.md).
+
+Em ambiente de desenvolvimento (docker-compose), ambos os bancos podem coexistir na mesma instância PostgreSQL. Em produção, recomenda-se instâncias separadas.
 
 ---
 
@@ -115,3 +117,4 @@ Em ambiente de desenvolvimento (docker-compose), ambos os bancos podem coexistir
 - [Microservices Patterns — Database per Service](https://microservices.io/patterns/data/database-per-service.html)
 - [Npgsql — Entity Framework Core Provider for PostgreSQL](https://www.npgsql.org/efcore/)
 - [PostgreSQL — ACID Compliance](https://www.postgresql.org/about/)
+- [ADR-015 — Segregação de Schemas PostgreSQL por Responsabilidade e Controle de Acesso](./ADR-015-segregacao-schemas-postgresql.md)

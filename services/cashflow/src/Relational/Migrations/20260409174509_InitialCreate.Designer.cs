@@ -19,7 +19,6 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("cashflow")
                 .HasAnnotation("ProductVersion", "8.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
@@ -62,7 +61,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TB_TRANSACTION", "cashflow");
+                    b.ToTable("TB_TRANSACTION", (string)null);
                 });
 
             modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Shared.Events.OutboxEvent", b =>
@@ -115,7 +114,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                     b.HasIndex("Processed", "CreatedAt")
                         .HasDatabaseName("IX_OUTBOX_EVENT_PROCESSED_CREATED");
 
-                    b.ToTable("TB_OUTBOX_EVENT", "cashflow");
+                    b.ToTable("TB_OUTBOX_EVENT", "outbox");
                 });
 #pragma warning restore 612, 618
         }

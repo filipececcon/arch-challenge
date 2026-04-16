@@ -10,8 +10,9 @@
  *   3. Criar a coleção `transactions` com índices otimizados para consulta
  *
  * Credenciais (ambiente local / desenvolvimento):
- *   Root:      root / root          (administração)
- *   Aplicação: cashflow / cashflow  (acesso somente ao cashflow_read)
+ *   Root:       root / root           (administração)
+ *   CashFlow:   cashflow / cashflow  (acesso somente ao cashflow_read)
+ *   Dashboard:  dashboard / dashboard (acesso somente ao dashboard_read)
  *
  * Nota: em produção, use variáveis de ambiente via secrets manager e
  *       não exponha credenciais neste arquivo.
@@ -27,6 +28,17 @@ db.createUser({
     {
       role: 'readWrite',
       db:   'cashflow_read'
+    }
+  ]
+});
+
+db.createUser({
+  user: 'dashboard',
+  pwd:  'dashboard',
+  roles: [
+    {
+      role: 'readWrite',
+      db:   'dashboard_read'
     }
   ]
 });
@@ -51,5 +63,11 @@ db.transactions.createIndex(
   { name: 'idx_type_created_at' }
 );
 
-print('✅ MongoDB inicializado: banco cashflow_read, usuário cashflow e índices criados.');
+// ── Dashboard: read model (consolidados + idempotência de eventos) ─────────────
+db = db.getSiblingDB('dashboard_read');
+
+db.createCollection('daily_consolidations');
+db.createCollection('processed_integration_events');
+
+print('✅ MongoDB inicializado: cashflow_read + dashboard_read, usuários e índices criados.');
 

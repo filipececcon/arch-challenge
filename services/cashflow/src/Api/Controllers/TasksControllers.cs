@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ArchChallenge.CashFlow.Application.Common.Interfaces;
 using ArchChallenge.CashFlow.Application.Common.Tasks;
 using TaskStatus = ArchChallenge.CashFlow.Application.Common.Tasks.TaskStatus;
 

@@ -1,22 +1,21 @@
 using System.Net;
 using System.Net.Http.Json;
-using ArchChallenge.CashFlow.Api;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Domain.Enums;
+using ArchChallenge.CashFlow.Tests.Integration.Support;
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace ArchChallenge.CashFlow.Tests.Integration.Api;
 
-public class TransactionsIntegrationTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class TransactionsIntegrationTests(CashFlowWebApplicationFactory factory)
+    : IClassFixture<CashFlowWebApplicationFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task POST_Transactions_ShouldReturn202WithTaskId()
     {
-        var command = new EnqueueTransactionCommand(
+        var command = new EnqueueTransaction(
             TransactionType.Credit,
             100m,
             "Test");

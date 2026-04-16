@@ -1,6 +1,4 @@
-using ArchChallenge.CashFlow.Application.Transactions.Events.TransactionProcessed;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
-using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
+using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Models;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 
@@ -19,7 +17,7 @@ public sealed class GetTransactionByIdHandler(
         var document = await documentsRepository.FindOneByIdAsync(request.Id, cancellationToken);
 
         if (document is not null) return GetTransactionByIdFactory.Create(document);
-
+        
         var hasPendingSync = await outboxRepository.HasPendingForAggregateAsync(
             TransactionProcessedMessage.EventName,
             request.Id,

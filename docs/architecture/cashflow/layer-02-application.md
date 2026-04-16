@@ -12,6 +12,8 @@ O **enqueue** de transações é tratado por um **handler genérico** (`EnqueueC
 
 A **validação** de entrada é aplicada de forma transversal pelo **`ValidationBehavior`**, um `IPipelineBehavior` que executa todos os `IValidator<TRequest>` registrados (FluentValidation) **antes** do handler correspondente, lançando `ValidationException` quando há falhas.
 
+A **auditoria** é aplicada pelo **`AuditBehavior`**, um segundo `IPipelineBehavior` que, para comandos que implementem `IAuditableCommand`, define os metadados de contexto (`UserId`, `OccurredAt`, `action`) no `IAuditContext` scoped **antes** do handler executar. A materialização do registro de auditoria ocorre na `UnitOfWork`, dentro da mesma transação PostgreSQL que persiste o agregado. O detalhamento completo do mecanismo está em [layer-09-audit.md](./layer-09-audit.md).
+
 O **tratamento de idempotência** no enqueue combina a chave opcional `IEnqueueCommand.IdempotencyKey` com **`ITaskCacheService`**: requisições repetidas com a mesma chave recebem o mesmo `taskId` já associado, dentro da janela de TTL configurada (por exemplo, **24 horas**).
 
 As **consultas** exploram **leitura híbrida** quando necessário: em especial, `GetTransactionById` consulta primeiro o **repositório de documentos** (MongoDB); se o documento ainda não existir mas houver **evento de outbox pendente** para o agregado, o handler faz **fallback** ao repositório **relacional** via specification, evitando retorno vazio durante a janela entre persistência e projeção.
@@ -23,7 +25,8 @@ As **consultas** exploram **leitura híbrida** quando necessário: em especial, 
 | Padrão | Implementação |
 |--------|---------------|
 | CQRS (Command/Query Separation) | Commands: `EnqueueTransactionCommand`, `ExecuteTransactionCommand`; Queries: `GetAllTransactionsQuery`, `GetTransactionByIdQuery` |
-| Pipeline Behavior | `ValidationBehavior<TRequest,TResponse>` — validação automática via FluentValidation antes de cada handler |
+| Pipeline Behavior (validação) | `ValidationBehavior<TRequest,TResponse>` — validação automática via FluentValidation antes de cada handler |
+| Pipeline Behavior (auditoria) | `AuditBehavior<TRequest,TResponse>` — define metadados no `IAuditContext` para comandos `IAuditableCommand` |
 | Generic Enqueue Handler | `EnqueueCommandHandler<TCommand,TMessage>` — reutilizável para qualquer command que implemente `IEnqueueCommand<TMessage>` |
 | Application Event (MediatR INotification) | `TransactionProcessedEvent` desacopla persistência de publicação no broker |
 | Idempotência | `IEnqueueCommand.IdempotencyKey` + `ITaskCacheService` com TTL 24h |
@@ -36,6 +39,13 @@ As **consultas** exploram **leitura híbrida** quando necessário: em especial, 
 ```mermaid
 classDiagram
   direction TB
+
+  class CommandBase {
+    <<abstract record>>
+    note: Application.Common.Commands\nIAuditableCommand; IRequest declarado em cada comando
+    +string UserId
+    +DateTime OccurredAt
+  }
 
   class IEnqueueCommand~TMessage~ {
     +Guid? IdempotencyKey
@@ -111,6 +121,8 @@ classDiagram
     <<interface>>
   }
 
+  CommandBase <|-- EnqueueTransactionCommand : herda
+  CommandBase <|-- ExecuteTransactionCommand : herda
   IEnqueueCommand~TMessage~ <|.. EnqueueTransactionCommand : implementa
   IRequestHandler~TRequest,TResponse~ <|.. EnqueueCommandHandler~TCommand,TMessage~ : implementa
   IRequestHandler~TRequest,TResponse~ <|.. ExecuteTransactionHandler : implementa
@@ -129,6 +141,7 @@ classDiagram
   ExecuteTransactionHandler ..> IPublisher : usa
   ExecuteTransactionHandler ..> IUnitOfWork : usa
   ExecuteTransactionHandler ..> ITaskCacheService : usa
+  ExecuteTransactionHandler ..> IAuditContext : usa
 
   GetAllTransactionsHandler ..> IDocumentsReadRepository~TransactionDocument~ : usa
 

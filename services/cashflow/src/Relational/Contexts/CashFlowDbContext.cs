@@ -12,7 +12,10 @@ public class CashFlowDbContext(DbContextOptions<CashFlowDbContext> options) : Db
     /// garantindo atomicidade. O <c>OutboxWorkerService</c> os sincroniza
     /// com o MongoDB de forma assíncrona.
     /// </summary>
-    public DbSet<OutboxEvent>  OutboxEvents  => Set<OutboxEvent>();
+    public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
+
+    /// <summary>Outbox transacional para envio assíncrono ao immudb.</summary>
+    public DbSet<AuditEvent> AuditOutboxEvents => Set<AuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

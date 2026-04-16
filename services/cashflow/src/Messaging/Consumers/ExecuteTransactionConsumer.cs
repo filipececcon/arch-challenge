@@ -8,8 +8,12 @@ namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Consumers
 
 [ConsumerChannel<TransactionCreateChannel>]
 public sealed class ExecuteTransactionConsumer(ISender sender)
-    : CommandConsumerBase<EnqueueTransactionMessage, ExecuteTransactionCommand>(sender)
+    : CommandConsumerBase<EnqueueTransactionMessage, ExecuteTransaction>(sender)
 {
-    protected override ExecuteTransactionCommand BuildCommand(EnqueueTransactionMessage msg)
-        => new(msg.TaskId, msg.Type, msg.Amount, msg.Description);
+    protected override ExecuteTransaction BuildCommand(EnqueueTransactionMessage msg)
+        => new(msg.TaskId, msg.Type, msg.Amount, msg.Description)
+        {
+            UserId     = msg.UserId,
+            OccurredAt = msg.OccurredAt
+        };
 }

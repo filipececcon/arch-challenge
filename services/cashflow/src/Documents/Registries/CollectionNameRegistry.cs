@@ -11,7 +11,7 @@ internal sealed class CollectionNameRegistry : ICollectionNameRegistry
     public void Register<TDocument>(string collectionName) where TDocument : class
     {
         if (string.IsNullOrWhiteSpace(collectionName))
-            throw new ArgumentException("O nome da coleção não pode ser vazio.", nameof(collectionName));
+            throw new ArgumentException("Collection name cannot be empty.", nameof(collectionName));
 
         _map[typeof(TDocument)] = collectionName;
     }
@@ -22,7 +22,7 @@ internal sealed class CollectionNameRegistry : ICollectionNameRegistry
             return name;
 
         throw new InvalidOperationException(
-            $"Nenhuma coleção MongoDB registrada para o tipo '{typeof(TDocument).FullName}'. " +
-            "Registre a coleção em AddDocumentsData usando o método AddMongoCollections.");
+            $"No MongoDB collection registered for type '{typeof(TDocument).FullName}'. " +
+            "Register the collection in AddDocumentsData using the AddMongoCollections method.");
     }
 }

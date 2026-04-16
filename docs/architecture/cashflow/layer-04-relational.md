@@ -214,9 +214,50 @@ A chave aninhada em `CollectionMap` segue o padrão `Outbox:CollectionMap:{Event
 
 ---
 
+## Segregação de Schemas e Controle de Acesso
+
+O banco `cashflow_db` é organizado em três schemas com responsabilidades distintas, o que permite aplicar **privileges mínimos por role** de forma direta e semanticamente clara:
+
+```mermaid
+flowchart LR
+    subgraph cashflow_db["cashflow_db (PostgreSQL)"]
+        subgraph public["schema: public\n(dados de domínio)"]
+            TB_TRANSACTION["TB_TRANSACTION"]
+        end
+
+        subgraph outbox["schema: outbox\n(outbox transacional)"]
+            TB_OUTBOX_EVENT["TB_OUTBOX_EVENT"]
+            TB_OUTBOX_AUDIT_EVENT["TB_OUTBOX_AUDIT_EVENT"]
+        end
+
+        subgraph control["schema: control\n(metadados EF Core)"]
+            EF_HISTORY["__EFMigrationsHistory"]
+        end
+    end
+```
+
+| Schema | Finalidade | Quem acessa |
+|--------|------------|-------------|
+| `public` | Tabelas de domínio da aplicação | API (`cashflow_app`), pipeline de deploy (`cashflow_deploy`) |
+| `outbox` | Tabelas do Transactional Outbox Pattern | Workers de outbox (`cashflow_outbox`), API apenas para INSERT dentro da transação |
+| `control` | Histórico de migrations do EF Core | Pipeline de deploy (`cashflow_deploy`) exclusivamente |
+
+### Justificativa
+
+Dois riscos concretos motivam essa separação:
+
+1. **Migration acidental em ambiente compartilhado**: com `__EFMigrationsHistory` em `control` e o role de desenvolvedor sem privilégio nesse schema, `dotnet ef database update` apontando para um ambiente remoto falha imediatamente — mesmo que o desenvolvedor tenha acesso às tabelas de domínio.
+
+2. **Isolamento dos workers de outbox**: o role `cashflow_outbox`, que executa o `OutboxWorkerService` e o `AuditOutboxWorkerService`, recebe `SELECT/UPDATE` apenas em `outbox`. Sem `USAGE` em `public`, esse processo não consegue ler nem escrever em `TB_TRANSACTION`, limitando o raio de impacto em caso de falha ou comprometimento.
+
+> Os roles e grants **não** são aplicados pelas migrations EF (o `EnsureSchema` apenas cria o schema). O provisionamento dos roles e a concessão de privilégios devem ocorrer no script de inicialização de infraestrutura (init SQL do Docker, Terraform, Ansible, etc.). Consulte [ADR-015](../../decisions/ADR-015-segregacao-schemas-postgresql.md) para o exemplo de grants de referência.
+
+---
+
 ## Decisões
 
 - **PostgreSQL como banco por serviço**: a escolha de PostgreSQL para o estado relacional do Cashflow está registrada em [ADR-006 — PostgreSQL (database per service)](../../decisions/ADR-006-postgresql-database-per-service.md).
+- **Segregação de schemas por responsabilidade e controle de acesso**: o desenho dos três schemas (`public`, `outbox`, `control`) e os perfis de roles associados estão detalhados em [ADR-015 — Segregação de Schemas PostgreSQL](../../decisions/ADR-015-segregacao-schemas-postgresql.md).
 - **Specification no repositório de leitura**: o uso de `ISpecification<T>` com avaliador em consultas está alinhado a [ADR-012 — Specification Pattern no Read Repository](../../decisions/ADR-012-specification-pattern-read-repository.md).
 
 ---

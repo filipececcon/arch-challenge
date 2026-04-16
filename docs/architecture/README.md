@@ -101,6 +101,7 @@ A documentação detalhada de cada camada do serviço **Cashflow API** está dis
 | Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./cashflow/layer-06-messaging.md) |
 | Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./cashflow/layer-07-caching.md) |
 | Infrastructure.CrossCutting.Security | [layer-08-security.md](./cashflow/layer-08-security.md) |
+| Infrastructure.CrossCutting.Audit | [layer-09-audit.md](./cashflow/layer-09-audit.md) |
 
 ---
 

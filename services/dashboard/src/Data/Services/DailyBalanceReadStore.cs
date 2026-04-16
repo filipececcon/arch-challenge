@@ -1,21 +1,26 @@
+using System.Globalization;
 using ArchChallenge.Dashboard.Application.Abstractions;
 using ArchChallenge.Dashboard.Application.DailyBalances;
-using ArchChallenge.Dashboard.Data.Context;
-using Microsoft.EntityFrameworkCore;
+using ArchChallenge.Dashboard.Data.Documents;
+using MongoDB.Driver;
 
 namespace ArchChallenge.Dashboard.Data.Services;
 
-public class DailyBalanceReadStore(DashboardDbContext db) : IDailyBalanceReadStore
+public class DailyBalanceReadStore : IDailyBalanceReadStore
 {
+    private readonly IMongoCollection<DailyConsolidationDocument> _daily;
+
+    public DailyBalanceReadStore(IMongoDatabase database)
+    {
+        _daily = database.GetCollection<DailyConsolidationDocument>(MongoDashboardCollections.DailyConsolidations);
+    }
+
     public async Task<DailyBalanceDto?> GetByDateAsync(DateOnly date, CancellationToken cancellationToken)
     {
-        var row = await db.DailyConsolidations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Date == date, cancellationToken);
+        var id = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var row = await _daily.Find(d => d.Id == id).FirstOrDefaultAsync(cancellationToken);
 
-        return row is null
-            ? null
-            : new DailyBalanceDto(row.Date, row.TotalCredits, row.TotalDebits, row.TotalCredits - row.TotalDebits);
+        return row is null ? null : ToDto(row);
     }
 
     public async Task<IReadOnlyList<DailyBalanceDto>> ListAsync(
@@ -23,16 +28,27 @@ public class DailyBalanceReadStore(DashboardDbContext db) : IDailyBalanceReadSto
         DateOnly? to,
         CancellationToken cancellationToken)
     {
-        var query = db.DailyConsolidations.AsNoTracking().AsQueryable();
+        var filter = Builders<DailyConsolidationDocument>.Filter.Empty;
 
         if (from is not null)
-            query = query.Where(d => d.Date >= from);
+        {
+            var fromId = from.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            filter &= Builders<DailyConsolidationDocument>.Filter.Gte(d => d.Id, fromId);
+        }
+
         if (to is not null)
-            query = query.Where(d => d.Date <= to);
+        {
+            var toId = to.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            filter &= Builders<DailyConsolidationDocument>.Filter.Lte(d => d.Id, toId);
+        }
 
-        var rows = await query.OrderBy(d => d.Date).ToListAsync(cancellationToken);
+        var rows = await _daily.Find(filter).SortBy(d => d.Id).ToListAsync(cancellationToken);
+        return rows.Select(ToDto).ToList();
+    }
 
-        return rows.Select(r => new DailyBalanceDto(r.Date, r.TotalCredits, r.TotalDebits, r.TotalCredits - r.TotalDebits))
-            .ToList();
+    private static DailyBalanceDto ToDto(DailyConsolidationDocument row)
+    {
+        var date = DateOnly.ParseExact(row.Id, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return new DailyBalanceDto(date, row.TotalCredits, row.TotalDebits, row.TotalCredits - row.TotalDebits);
     }
 }

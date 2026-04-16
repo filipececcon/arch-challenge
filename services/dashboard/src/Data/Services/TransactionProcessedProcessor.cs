@@ -1,68 +1,60 @@
-using System.Data;
+using System.Globalization;
 using ArchChallenge.Contracts.Events;
 using ArchChallenge.Dashboard.Application.Abstractions;
-using ArchChallenge.Dashboard.Data.Context;
-using ArchChallenge.Dashboard.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
+using ArchChallenge.Dashboard.Data.Documents;
+using MongoDB.Driver;
 
 namespace ArchChallenge.Dashboard.Data.Services;
 
-public class TransactionProcessedProcessor(DashboardDbContext db) : ITransactionProcessedProcessor
+public class TransactionProcessedProcessor : ITransactionProcessedProcessor
 {
+    private readonly IMongoCollection<DailyConsolidationDocument> _daily;
+    private readonly IMongoCollection<ProcessedIntegrationEventDocument> _processed;
+
+    public TransactionProcessedProcessor(IMongoDatabase database)
+    {
+        _daily = database.GetCollection<DailyConsolidationDocument>(MongoDashboardCollections.DailyConsolidations);
+        _processed = database.GetCollection<ProcessedIntegrationEventDocument>(MongoDashboardCollections.ProcessedIntegrationEvents);
+    }
+
     public async Task ProcessAsync(TransactionRegisteredIntegrationEvent message, CancellationToken cancellationToken)
     {
-        var strategy = db.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
-        {
-            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var filterProcessed = Builders<ProcessedIntegrationEventDocument>.Filter.Eq(e => e.Id, message.EventId);
+        var updateProcessed = Builders<ProcessedIntegrationEventDocument>.Update
+            .SetOnInsert(e => e.ProcessedAt, DateTime.UtcNow);
 
-            var exists = await db.ProcessedIntegrationEvents
-                .AsNoTracking()
-                .AnyAsync(e => e.EventId == message.EventId, cancellationToken);
+        var ack = await _processed.UpdateOneAsync(
+            filterProcessed,
+            updateProcessed,
+            new UpdateOptions { IsUpsert = true },
+            cancellationToken);
 
-            if (exists)
-            {
-                await tx.CommitAsync(cancellationToken);
-                return;
-            }
+        if (ack.UpsertedId is null && ack.MatchedCount > 0)
+            return;
 
-            var occurredUtc = message.OccurredAt.Kind == DateTimeKind.Utc
-                ? message.OccurredAt
-                : message.OccurredAt.ToUniversalTime();
+        if (ack.UpsertedId is null)
+            throw new InvalidOperationException("Evento não pôde ser registrado de forma idempotente.");
 
-            var day = DateOnly.FromDateTime(occurredUtc);
+        var occurredUtc = message.OccurredAt.Kind == DateTimeKind.Utc
+            ? message.OccurredAt
+            : message.OccurredAt.ToUniversalTime();
 
-            var consolidation = await db.DailyConsolidations
-                .FirstOrDefaultAsync(c => c.Date == day, cancellationToken);
+        var day = DateOnly.FromDateTime(occurredUtc);
+        var dayId = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-            if (consolidation is null)
-            {
-                consolidation = new DailyConsolidation
-                {
-                    Date = day,
-                    TotalCredits = 0,
-                    TotalDebits = 0,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                db.DailyConsolidations.Add(consolidation);
-            }
+        var amount = message.Payload.Amount;
+        decimal incCredit = 0, incDebit = 0;
+        if (string.Equals(message.Payload.Type, "CREDIT", StringComparison.OrdinalIgnoreCase))
+            incCredit = amount;
+        else if (string.Equals(message.Payload.Type, "DEBIT", StringComparison.OrdinalIgnoreCase))
+            incDebit = amount;
 
-            var amount = message.Payload.Amount;
-            if (string.Equals(message.Payload.Type, "CREDIT", StringComparison.OrdinalIgnoreCase))
-                consolidation.TotalCredits += amount;
-            else if (string.Equals(message.Payload.Type, "DEBIT", StringComparison.OrdinalIgnoreCase))
-                consolidation.TotalDebits += amount;
+        var filterDay = Builders<DailyConsolidationDocument>.Filter.Eq(d => d.Id, dayId);
+        var updateDay = Builders<DailyConsolidationDocument>.Update
+            .Inc(d => d.TotalCredits, incCredit)
+            .Inc(d => d.TotalDebits, incDebit)
+            .Set(d => d.UpdatedAt, DateTime.UtcNow);
 
-            consolidation.UpdatedAt = DateTime.UtcNow;
-
-            db.ProcessedIntegrationEvents.Add(new ProcessedIntegrationEvent
-            {
-                EventId = message.EventId,
-                ProcessedAt = DateTime.UtcNow
-            });
-
-            await db.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-        });
+        await _daily.UpdateOneAsync(filterDay, updateDay, new UpdateOptions { IsUpsert = true }, cancellationToken);
     }
 }

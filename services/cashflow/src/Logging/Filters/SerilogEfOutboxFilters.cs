@@ -20,11 +20,14 @@ internal static class SerilogEfOutboxFilters
         if (logEvent.Properties.TryGetValue("commandText", out var commandTextProp))
         {
             var sql = commandTextProp.ToString().Trim('"');
-            if (sql.Contains(OutboxWorkerEfQueryTags.PendingBatchQueryMarker, StringComparison.Ordinal))
+            if (sql.Contains(OutboxWorkerEfQueryTags.PendingBatchQueryMarker, StringComparison.Ordinal)
+                || sql.Contains(OutboxWorkerEfQueryTags.AuditPendingBatchQueryMarker, StringComparison.Ordinal))
                 return true;
         }
 
-        return logEvent.RenderMessage().Contains(OutboxWorkerEfQueryTags.PendingBatchQueryMarker, StringComparison.Ordinal);
+        var rendered = logEvent.RenderMessage();
+        return rendered.Contains(OutboxWorkerEfQueryTags.PendingBatchQueryMarker, StringComparison.Ordinal)
+               || rendered.Contains(OutboxWorkerEfQueryTags.AuditPendingBatchQueryMarker, StringComparison.Ordinal);
     }
 
     private static bool TryGetSourceContext(LogEvent logEvent, out string source)

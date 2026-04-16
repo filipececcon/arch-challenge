@@ -1,5 +1,3 @@
-using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Resolvers;
-
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents.Repositories;
 
 /// <summary>

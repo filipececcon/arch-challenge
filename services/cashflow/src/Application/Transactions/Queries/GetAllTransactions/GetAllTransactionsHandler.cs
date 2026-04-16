@@ -1,9 +1,8 @@
 using System.Linq.Expressions;
 using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 using ArchChallenge.CashFlow.Domain.Enums;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces.Repository;
-using ArchChallenge.CashFlow.Domain.Shared.Query;
-using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
+using ArchChallenge.CashFlow.Domain.Shared.Criteria;
+using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Models;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransactions;
 
@@ -23,20 +22,20 @@ public sealed class GetAllTransactionsHandler(IDocumentsReadRepository<Transacti
             descending: true,
             cancellationToken: cancellationToken);
 
-        var list = documents.Select(GetTransactionByIdFactory.Create).ToList();
+        var transactions = documents.Select(GetTransactionByIdFactory.Create).ToList();
 
-        return new GetAllTransactionsResult(list);
+        return new GetAllTransactionsResult(transactions);
     }
 
     private static Expression<Func<TransactionDocument, bool>>? BuildCriteria(GetAllTransactionsQuery request)
     {
         var q = new QueryCriteriaBuilder<TransactionDocument>();
 
-        if (!string.IsNullOrWhiteSpace(request.Type)
-            && Enum.TryParse<TransactionType>(request.Type, ignoreCase: true, out var txType))
+        if (!string.IsNullOrWhiteSpace(request.Type))
         {
-            var typeString = txType.ToString();
-            q.Where(d => d.Type == typeString);
+            var txType = Enum.Parse<TransactionType>(request.Type, ignoreCase: true);
+            
+            q.Where(d => d.Type == txType.ToString());
         }
 
         q.AndIf(request.Active.HasValue, d => d.Active == request.Active!.Value);

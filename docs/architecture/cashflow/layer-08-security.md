@@ -10,6 +10,7 @@ O projeto **ArchChallenge.CashFlow.Infrastructure.CrossCutting.Security** centra
 - **Transformação de claims**: mapear roles presentes no claim `realm_access.roles` (JSON emitido pelo Keycloak) para claims `ClaimTypes.Role` no `ClaimsPrincipal`, permitindo autorização baseada em papéis no ASP.NET Core.
 - **Modo local para desenvolvimento**: quando JWT está desativado, um handler de autenticação aceita qualquer requisição como autenticada, evitando dependência de Keycloak em máquinas locais (não usar em produção).
 - **Autorização declarativa**: uso de `[Authorize]` nos controllers que exigem usuário autenticado; registro de `AddAuthorization()` na composição de serviços.
+- **Enriquecimento de comandos com identidade (`IdentityCommandFilter`)**: Action Filter registrado globalmente que extrai o claim `sub` (ou `NameIdentifier`) do JWT e preenche `UserId` e `OccurredAt` em todos os argumentos de action que implementam `IAuditableCommand`, propagando a identidade do usuário para o pipeline de auditoria e para mensagens assíncronas.
 
 ---
 
@@ -46,34 +47,48 @@ classDiagram
         +AddSecurityConfiguration(services, configuration)$ IServiceCollection
     }
 
+    class IAsyncActionFilter {
+        <<interface>>
+    }
+
+    class IdentityCommandFilter {
+        +OnActionExecutionAsync(context, next) Task
+        note: extrai sub do JWT\nfill IAuditableCommand.UserId e OccurredAt
+    }
+
     AuthenticationHandler~AuthenticationSchemeOptions~ <|-- LocalAuthenticationHandler
     IClaimsTransformation <|.. KeycloakRolesClaimsTransformation
+    IAsyncActionFilter <|.. IdentityCommandFilter
 
     note for DependencyInjection "AddSecurityConfiguration: se Security:Disabled = true registra LocalAuthenticationHandler; caso contrário JWT Bearer + KeycloakRolesClaimsTransformation."
+    note for IdentityCommandFilter "Registrado via options.Filters.Add em AddControllers()"
 ```
 
 **Notas:**
 
 - Quando **`Security:Disabled`** é verdadeiro, não há validação JWT: o esquema local autentica todas as requisições para facilitar desenvolvimento.
 - Quando é falso, o pipeline usa **JWT Bearer** e, após validação do token, **`KeycloakRolesClaimsTransformation`** enriquece o principal com roles derivadas de `realm_access`.
+- **`IdentityCommandFilter`** executa após o model binding: itera sobre os action arguments que implementam `IAuditableCommand` e preenche `UserId` (claim `sub` ou `NameIdentifier`) e `OccurredAt` (`DateTime.UtcNow`). É registrado globalmente via `AddControllers(options => options.Filters.Add<IdentityCommandFilter>())` em `Program.cs`.
 
 ---
 
-## Diagrama de Sequência — Autenticação JWT (produção)
+## Diagrama de Sequência — Autenticação JWT e enriquecimento do comando (produção)
 
-Fluxo típico de uma chamada autenticada a um endpoint protegido (por exemplo, transações).
+Fluxo típico de uma chamada autenticada a um endpoint protegido, incluindo a injeção de identidade no comando pelo `IdentityCommandFilter`.
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant Cliente
     participant Gateway as API Gateway
     participant Pipeline as Pipeline ASP.NET Core
     participant JwtBearer as JwtBearerHandler
     participant Transform as KeycloakRolesClaimsTransformation
+    participant ICF as IdentityCommandFilter
     participant Controller as TransactionsController
 
     Cliente->>Gateway: HTTP + Authorization: Bearer {token}
-    Gateway->>Pipeline: encaminha (rota ex.: /api/transactions)
+    Gateway->>Pipeline: encaminha (rota ex.: POST /api/transactions)
     Note over Pipeline,Controller: Autenticação e autorização executam antes do action
 
     Pipeline->>JwtBearer: valida token (assinatura, issuer, audience, lifetime)
@@ -82,7 +97,11 @@ sequenceDiagram
         Transform->>Transform: extrai roles de realm_access.roles
         Transform-->>JwtBearer: ClaimsPrincipal com ClaimTypes.Role
         JwtBearer-->>Pipeline: usuário autenticado
-        Pipeline->>Controller: [Authorize] satisfeito — executa action
+        Pipeline->>ICF: OnActionExecutionAsync (após model binding)
+        ICF->>ICF: FindFirstValue("sub") → UserId
+        ICF->>ICF: DateTime.UtcNow → OccurredAt
+        ICF->>ICF: arg.UserId = userId; arg.OccurredAt = occurredAt (para cada IAuditableCommand)
+        ICF->>Controller: action executa com comando enriquecido
     else Token inválido ou ausente
         JwtBearer-->>Pipeline: falha de autenticação
         Pipeline-->>Cliente: 401 Unauthorized

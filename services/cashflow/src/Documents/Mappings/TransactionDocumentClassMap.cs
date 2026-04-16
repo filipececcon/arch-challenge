@@ -1,4 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
 using MongoDB.Bson.Serialization;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents.Mappings;

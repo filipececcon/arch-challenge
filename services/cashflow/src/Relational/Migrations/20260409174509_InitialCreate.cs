@@ -11,13 +11,9 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            TransactionTable(migrationBuilder);
+            migrationBuilder.EnsureSchema("control");
+            migrationBuilder.EnsureSchema("outbox");
 
-            OutboxEventTable(migrationBuilder);
-        }
-
-        private static void OutboxEventTable(MigrationBuilder migrationBuilder)
-        {
             migrationBuilder.CreateTable(
                 name: "TB_TRANSACTION",
                 columns: table => new
@@ -35,16 +31,9 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                     table.PrimaryKey("PK_TB_TRANSACTION", x => x.ID);
                 });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_OUTBOX_EVENT_PROCESSED_CREATED",
-                table: "TB_OUTBOX_EVENT",
-                columns: new[] { "ST_PROCESSED", "DT_CREATED_AT" });
-        }
-
-        private static void TransactionTable(MigrationBuilder migrationBuilder)
-        {
             migrationBuilder.CreateTable(
                 name: "TB_OUTBOX_EVENT",
+                schema: "outbox",
                 columns: table => new
                 {
                     ID = table.Column<Guid>(type: "uuid", nullable: false),
@@ -61,12 +50,23 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                 {
                     table.PrimaryKey("PK_TB_OUTBOX_EVENT", x => x.ID);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OUTBOX_EVENT_PROCESSED_CREATED",
+                schema: "outbox",
+                table: "TB_OUTBOX_EVENT",
+                columns: new[] { "ST_PROCESSED", "DT_CREATED_AT" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(name: "TB_OUTBOX_EVENT");
+            migrationBuilder.DropIndex(
+                name: "IX_OUTBOX_EVENT_PROCESSED_CREATED",
+                schema: "outbox",
+                table: "TB_OUTBOX_EVENT");
+
+            migrationBuilder.DropTable(name: "TB_OUTBOX_EVENT", schema: "outbox");
 
             migrationBuilder.DropTable(name: "TB_TRANSACTION");
         }

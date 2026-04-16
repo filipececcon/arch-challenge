@@ -1,9 +1,7 @@
+
 namespace ArchChallenge.CashFlow.Application.Transactions.Events.TransactionProcessed;
 
-public sealed record TransactionProcessedMessage(string Payload)
+public sealed record TransactionProcessedMessage(string Payload) : MessageBase(EventName)
 {
-    public static string EventName = "TransactionProcessed";
-    public Guid EventId { get; } = Guid.NewGuid();
-    public DateTime OccurredAt { get; } = DateTime.UtcNow;
-    public string Payload { get; } = Payload;
+    public new const string EventName = "TransactionProcessed";
 }

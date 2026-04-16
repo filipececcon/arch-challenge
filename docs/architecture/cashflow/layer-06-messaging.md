@@ -110,19 +110,24 @@ sequenceDiagram
 
 ## Diagrama de Sequência — Consumo e despacho para MediatR
 
+O consumer reconstrói `UserId` e `OccurredAt` da mensagem no comando, garantindo que a identidade do usuário original seja propagada para o pipeline de auditoria mesmo após cruzar o boundary assíncrono.
+
 ```mermaid
 sequenceDiagram
+    autonumber
     participant RabbitMQ
     participant MassTransit
     participant ExecuteTransactionConsumer
     participant ISender
     participant ExecuteTransactionHandler
 
-    RabbitMQ->>MassTransit: entrega mensagem na fila do canal
+    RabbitMQ->>MassTransit: entrega EnqueueTransactionMessage na fila
     MassTransit->>ExecuteTransactionConsumer: Consume(ConsumeContext)
-    ExecuteTransactionConsumer->>ExecuteTransactionConsumer: ConsumeAsync(EnqueueTransactionMessage)
+    ExecuteTransactionConsumer->>ExecuteTransactionConsumer: ConsumeAsync(msg)
+    ExecuteTransactionConsumer->>ExecuteTransactionConsumer: BuildCommand(msg)
+    Note over ExecuteTransactionConsumer: new ExecuteTransactionCommand{TaskId, Type, ...}\ncom UserId=msg.UserId e OccurredAt=msg.OccurredAt
     ExecuteTransactionConsumer->>ISender: Send(ExecuteTransactionCommand)
-    ISender->>ExecuteTransactionHandler: despacha comando
+    ISender->>ExecuteTransactionHandler: despacha comando (com identidade preservada)
 ```
 
 ---
@@ -145,7 +150,17 @@ sequenceDiagram
 
 ---
 
+## Contrato das mensagens
+
+| Mensagem | Campos | Observação |
+|----------|--------|------------|
+| `EnqueueTransactionMessage` | `TaskId`, `UserId`, `OccurredAt`, `Type`, `Amount`, `Description` | Publicada pelo `EnqueueCommandHandler`; `UserId` e `OccurredAt` propagam identidade HTTP para o worker assíncrono |
+| `TransactionProcessedMessage` | `EventId`, `OccurredAt`, `Payload` (JSON do agregado) | Publicada pelo `TransactionProcessedHandler`; consumida por serviços externos (ex: Dashboard) |
+
+---
+
 ## Decisões
 
 - A escolha de **RabbitMQ** como broker e o uso de MassTransit para abstrair transporte e endpoints estão registrados no [ADR-003 — Comunicação assíncrona com RabbitMQ](../../decisions/ADR-003-comunicacao-assincrona-rabbitmq.md).
 - O **formato JSON** das mensagens de integração e convenções associadas estão no [ADR-007 — Formato de mensagens JSON](../../decisions/ADR-007-formato-mensagens-json.md).
+- **Propagação de identidade pela mensagem**: `UserId` e `OccurredAt` são carregados em `EnqueueTransactionMessage` para que o consumer reconstrua a identidade do usuário no `ExecuteTransactionCommand`, habilitando auditoria correta mesmo após o boundary assíncrono (detalhes em [layer-09-audit.md](./layer-09-audit.md)).

@@ -26,8 +26,7 @@ public static class DependencyInjection
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                // INotification é implementada por TransactionProcessedEvent (MediatR).
-                // Excluir da topologia evita a criação de um exchange desnecessário no RabbitMQ.
+                // Evita que MassTransit crie exchanges para tipos MediatR (INotification).
                 cfg.Publish<INotification>(p => p.Exclude = true);
 
                 foreach (var channel in DiscoverChannels(assembly))

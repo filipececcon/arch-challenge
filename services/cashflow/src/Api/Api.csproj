@@ -44,6 +44,7 @@
     <ProjectReference Include="..\Documents\Documents.csproj" />
     <ProjectReference Include="..\I18n\I18n.csproj" />
     <ProjectReference Include="..\Security\Security.csproj" />
+    <ProjectReference Include="..\Shared\Shared.csproj" />
   </ItemGroup>
 
 </Project>

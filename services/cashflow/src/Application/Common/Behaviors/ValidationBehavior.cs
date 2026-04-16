@@ -8,8 +8,7 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
 {
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
-        if (!validators.Any())
-            return await next(cancellationToken);
+        if (!validators.Any()) return await next(cancellationToken);
 
         var context = new ValidationContext<TRequest>(request);
 
@@ -19,28 +18,12 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
             .Where(f => f != null)
             .ToList();
 
-        if (failures.Count == 0)
-            return await next(cancellationToken);
+        if (failures.Count == 0) return await next(cancellationToken);
 
         var notifications = failures
             .Select(f => new Notification(f.PropertyName, f.ErrorMessage))
             .ToList();
 
-        // if (IsResultType(typeof(TResponse)))
-        //     return CreateFailureResult(notifications);
-
         throw new ValidationException(failures);
     }
-
-    // private static bool IsResultType(Type type)
-    //     => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Result<>);
-    //
-    // private static TResponse CreateFailureResult(IReadOnlyList<Notification> notifications)
-    // {
-    //     var failureMethod = typeof(TResponse).GetMethod(
-    //         nameof(Result<object>.Failure),
-    //         [typeof(IReadOnlyList<Notification>)]);
-    //
-    //     return (TResponse)failureMethod!.Invoke(null, [notifications])!;
-    // }
 }

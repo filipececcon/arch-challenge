@@ -19,9 +19,6 @@ app.UseSwaggerConfiguration();
 app.UseHttpsRedirection();
 app.MapControllers();
 
-if (app.Environment.IsDevelopment())
-    await app.MigrateAsync();
-
 await app.RunAsync();
 
 public partial class Program { }

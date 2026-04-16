@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\shared\ArchChallenge.Contracts\ArchChallenge.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\..\shared\ArchChallenge.Contracts\ArchChallenge.Contracts.csproj" />
     <ProjectReference Include="..\Application\Application.csproj" />
   </ItemGroup>
 

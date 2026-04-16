@@ -1,9 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
-using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Mappings;
-using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Projections;
-using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Serialization;
-
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents;
 
 public static class DependencyInjection
@@ -18,21 +12,23 @@ public static class DependencyInjection
     public static IServiceCollection AddDocumentsData(this IServiceCollection services, IConfiguration configuration)
     {
         MongoBsonGuidSetup.EnsureConfigured();
-        TransactionDocumentClassMap.Register();
+        
+        RegisterMappings();
 
         var connectionString = configuration.GetConnectionString("MongoConnection");
-        var databaseName     = configuration["MongoDB:Database"];
+        
+        var databaseName = configuration["MongoDB:Database"];
 
         services.AddSingleton<IMongoClient>(_ => new MongoClient(connectionString));
 
-        services.AddSingleton<IMongoDatabase>(sp =>
-            sp.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
+        services.AddSingleton<IMongoDatabase>(sp => sp.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
 
         var registry = new CollectionNameRegistry();
 
         RegisterCollections(registry);
 
         services.AddSingleton<ICollectionNameRegistry>(registry);
+        
         services.AddSingleton<IMongoCollectionResolver, MongoCollectionResolver>();
 
         services.AddScoped(typeof(IDocumentsReadRepository<>), typeof(DocumentsReadRepository<>));
@@ -50,5 +46,13 @@ public static class DependencyInjection
     private static void RegisterCollections(ICollectionNameRegistry registry)
     {
         registry.Register<TransactionDocument>("transactions");
+    }
+
+    /// <summary>
+    /// Ponto único de registro de mapeamentos personalizados (ex: AutoMapper profiles) usados na camada Documents.
+    /// </summary>
+    private static void RegisterMappings()
+    {
+        TransactionDocumentClassMap.Register();
     }
 }

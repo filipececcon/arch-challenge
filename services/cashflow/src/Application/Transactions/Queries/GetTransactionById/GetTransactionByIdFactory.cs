@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Domain.Shared.ReadModels;
+using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Models;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 

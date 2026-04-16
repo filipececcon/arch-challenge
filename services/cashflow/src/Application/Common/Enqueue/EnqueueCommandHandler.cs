@@ -1,6 +1,3 @@
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
-using ArchChallenge.CashFlow.Application.Common.Tasks;
-
 namespace ArchChallenge.CashFlow.Application.Common.Enqueue;
 
 /// <summary>
@@ -21,8 +18,8 @@ public sealed class EnqueueCommandHandler<TCommand, TMessage>(ITaskCacheService 
         if (request.IdempotencyKey is { } key)
         {
             var existingTaskId = await taskCache.GetIdempotencyAsync(key, cancellationToken);
-            if (existingTaskId is not null)
-                return new EnqueueResult(existingTaskId.Value);
+            
+            if (existingTaskId is not null) return new EnqueueResult(existingTaskId.Value);
         }
 
         var taskId = Guid.NewGuid();

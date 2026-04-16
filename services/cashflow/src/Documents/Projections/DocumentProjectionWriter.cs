@@ -1,6 +1,5 @@
 using System.Text.Json;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using ArchChallenge.CashFlow.Domain.Shared.Projection;
+
 using MongoDB.Bson;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents.Projections;
@@ -16,15 +15,14 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents.Projections;
 /// </summary>
 internal sealed class DocumentProjectionWriter(IMongoDatabase database) : IDocumentProjectionWriter
 {
-    public async Task UpsertAsync(
-        string            collectionName,
-        string            jsonPayload,
-        CancellationToken cancellationToken = default)
+    public async Task UpsertAsync(string collectionName, string jsonPayload, CancellationToken cancellationToken = default)
     {
         var collection = database.GetCollection<BsonDocument>(collectionName);
-        var document   = BuildDocument(jsonPayload);
+        
+        var document = BuildDocument(jsonPayload);
 
         var filter = Builders<BsonDocument>.Filter.Eq("_id", document["_id"]);
+        
         await collection.ReplaceOneAsync(filter, document, new ReplaceOptions { IsUpsert = true }, cancellationToken);
     }
 
@@ -35,13 +33,19 @@ internal sealed class DocumentProjectionWriter(IMongoDatabase database) : IDocum
     private static BsonDocument BuildDocument(string jsonPayload)
     {
         var element  = JsonSerializer.Deserialize<JsonElement>(jsonPayload);
-        element      = EntityProjectionJson.RemoveRuntimeFields(element);
+        
+        element = EntityProjectionJson.RemoveRuntimeFields(element);
+        
         var document = BsonDocument.Parse(element.GetRawText());
 
         if (document.TryGetValue("Id", out var idValue) || document.TryGetValue("id", out idValue))
+        {
             document["_id"] = NormalizeIdForStorage(idValue);
+        }
         else if (!document.Contains("_id"))
+        {
             document["_id"] = BsonValue.Create(Guid.NewGuid().ToString());
+        }
 
         document.Remove("id");
         document.Remove("Id");

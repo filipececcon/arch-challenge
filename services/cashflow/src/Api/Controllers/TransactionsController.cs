@@ -20,7 +20,7 @@ public class TransactionsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
-        [FromBody] EnqueueTransactionCommand command,
+        [FromBody] EnqueueTransaction command,
         [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
         CancellationToken cancellationToken)
     {

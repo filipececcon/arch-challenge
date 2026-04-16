@@ -36,14 +36,18 @@ flowchart LR
   Doc --> DSh
 
   Msg --> App
+
+  Api --> Aud["Infrastructure.CrossCutting.Audit"]
+  Aud --> DSh
 ```
 
 **Notas:**
 
 - **Application** depende de **Domain**, que por sua vez depende de **Domain.Shared**.
-- A **Api** referencia camadas de infraestrutura (dados relacional, documentos, mensageria, cache, segurança) e **I18n** para composição na borda da aplicação.
+- A **Api** referencia camadas de infraestrutura (dados relacional, documentos, mensageria, cache, segurança, auditoria) e **I18n** para composição na borda da aplicação.
 - **Infrastructure.Data.Relational** e **Infrastructure.Data.Documents** dependem de **Domain.Shared** (tipos e contratos compartilhados).
 - **Infrastructure.CrossCutting.Messaging** referencia **Application** porque os consumidores MassTransit disparam comandos/consultas MediatR (`ISender`, `IRequest`).
+- **Infrastructure.CrossCutting.Audit** depende de **Domain.Shared** (interfaces `IAuditContext`, `IAuditableCommand`, `AuditOutboxEvent`).
 
 ---
 
@@ -84,7 +88,7 @@ sequenceDiagram
   EC->>S: Send(ExecuteTransactionCommand)
   S->>XH: ExecuteTransactionHandler
   XH->>PG: persistência + OutboxEvent
-  XH->>P: Publish domain notification
+  XH->>P: Publish notification
   P->>TPH: TransactionProcessedHandler
   TPH->>EB: publica evento processado
   EB->>EV: exchange cashflow.events
@@ -111,6 +115,7 @@ sequenceDiagram
 | 6 | Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./layer-06-messaging.md) |
 | 7 | Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./layer-07-caching.md) |
 | 8 | Infrastructure.CrossCutting.Security | [layer-08-security.md](./layer-08-security.md) |
+| 9 | Infrastructure.CrossCutting.Audit | [layer-09-audit.md](./layer-09-audit.md) |
 
 ---
 
@@ -124,3 +129,4 @@ sequenceDiagram
 | [ADR-006](../../decisions/ADR-006-postgresql-database-per-service.md) | PostgreSQL e database per service |
 | [ADR-008](../../decisions/ADR-008-autenticacao-autorizacao-keycloak.md) | Autenticação e autorização com Keycloak |
 | [ADR-012](../../decisions/ADR-012-specification-pattern-read-repository.md) | Specification pattern e repositório de leitura |
+| [ADR-015](../../decisions/ADR-015-segregacao-schemas-postgresql.md) | Segregação de schemas PostgreSQL por responsabilidade e controle de acesso |

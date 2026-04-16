@@ -11,16 +11,16 @@ public static class EntityProjectionJson
     /// </summary>
     public static JsonElement RemoveRuntimeFields(JsonElement element)
     {
-        if (element.ValueKind != JsonValueKind.Object)
-            return EnsureCamelCase(element);
+        if (element.ValueKind != JsonValueKind.Object) return EnsureCamelCase(element);
 
         var node = JsonNode.Parse(element.GetRawText());
 
-        if (node is not JsonObject obj)
-            return EnsureCamelCase(element);
+        if (node is not JsonObject obj) return EnsureCamelCase(element);
 
         foreach (var name in EntityProjectionRuntimeFields.JsonPropertyNames)
+        {
             obj.Remove(name);
+        }
 
         return EnsureCamelCase(JsonSerializer.SerializeToElement(obj));
     }
@@ -28,7 +28,7 @@ public static class EntityProjectionJson
     /// <summary>
     /// Garante camelCase em todas as chaves de objetos (recursivo em objetos e arrays).
     /// </summary>
-    public static JsonElement EnsureCamelCase(JsonElement element)
+    private static JsonElement EnsureCamelCase(JsonElement element)
     {
         return element.ValueKind switch
         {
@@ -38,6 +38,11 @@ public static class EntityProjectionJson
         };
     }
 
+    /// <summary>
+    /// Converte um array JSON para camelCase (recursivo em objetos e arrays aninhados).
+    /// </summary>
+    /// <param name="array"></param>
+    /// <returns></returns>
     private static JsonElement ToCamelCaseArray(JsonElement array)
     {
         var arr = new JsonArray();
@@ -47,6 +52,11 @@ public static class EntityProjectionJson
         return JsonSerializer.SerializeToElement(arr);
     }
 
+    /// <summary>
+    /// Converte um objeto JSON para camelCase (recursivo em objetos e arrays aninhados).
+    /// </summary>
+    /// <param name="obj"></param>
+    /// <returns></returns>
     private static JsonElement ToCamelCaseObject(JsonElement obj)
     {
         var jsonObject = new JsonObject();

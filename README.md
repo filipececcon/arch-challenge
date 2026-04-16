@@ -30,6 +30,7 @@ Os serviços se comunicam de forma **assíncrona via RabbitMQ**, garantindo que 
 | Frontend | Angular 19 + Tailwind CSS |
 | Banco de dados relacional | PostgreSQL |
 | Banco de dados de leitura | MongoDB (read model / projeções) |
+| Auditoria imutável | ImmuDB (CashFlow — registro append-only verificável) |
 | Cache | Redis |
 | Mensageria | RabbitMQ |
 | Autenticação | Keycloak (OAuth 2.0 / OIDC) |

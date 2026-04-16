@@ -54,3 +54,9 @@ scrape_configs:
       - targets: ["elasticsearch-exporter:9114"]
         labels:
           service: elasticsearch
+
+  - job_name: immudb
+    static_configs:
+      - targets: ["immudb:9497"]
+        labels:
+          service: immudb
