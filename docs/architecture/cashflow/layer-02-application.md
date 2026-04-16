@@ -10,9 +10,9 @@ A camada Application adota **CQRS leve** com **MediatR**: comandos e consultas s
 
 O **enqueue** de transações é tratado por um **handler genérico** (`EnqueueCommandHandler<TCommand, TMessage>`), reutilizável para qualquer comando que implemente `IEnqueueCommand<TMessage>`. Assim, a lógica de **geração de `taskId`**, marcação de tarefa como pendente no cache, **publicação no broker** e registro de **idempotência** fica centralizada.
 
-A **validação** de entrada é aplicada de forma transversal pelo **`ValidationBehavior`**, um `IPipelineBehavior` que executa todos os `IValidator<TRequest>` registrados (FluentValidation) **antes** do handler correspondente, lançando `ValidationException` quando há falhas.
+A **validação** de entrada é aplicada de forma transversal pelo **`ValidationBehavior`**, um `IPipelineBehavior` que executa todos os `IValidator<TRequest>` registrados (FluentValidation) **antes** do handler correspondente, lançando `ValidationException` quando há falhas. Os validators podem usar **`IStringLocalizer<Messages>`** e **`MessageKeys`** para mensagens nos recursos `.resx` — ver [layer-10-i18n.md](./layer-10-i18n.md).
 
-A **auditoria** é aplicada pelo **`AuditBehavior`**, um segundo `IPipelineBehavior` que, para comandos que implementem `IAuditableCommand`, define os metadados de contexto (`UserId`, `OccurredAt`, `action`) no `IAuditContext` scoped **antes** do handler executar. A materialização do registro de auditoria ocorre na `UnitOfWork`, dentro da mesma transação PostgreSQL que persiste o agregado. O detalhamento completo do mecanismo está em [layer-09-audit.md](./layer-09-audit.md).
+A **auditoria** é aplicada pelo **`AuditBehavior`**, um segundo `IPipelineBehavior` que, para comandos que implementem `IAuditable`, define os metadados de contexto (`UserId`, `OccurredAt`) no `IAuditContext` scoped **antes** do handler executar. A materialização do registro de auditoria ocorre na `UnitOfWork`, dentro da mesma transação PostgreSQL que persiste o agregado. O detalhamento completo do mecanismo está em [layer-09-immutable.md](./layer-09-immutable.md).
 
 O **tratamento de idempotência** no enqueue combina a chave opcional `IEnqueueCommand.IdempotencyKey` com **`ITaskCacheService`**: requisições repetidas com a mesma chave recebem o mesmo `taskId` já associado, dentro da janela de TTL configurada (por exemplo, **24 horas**).
 
@@ -24,11 +24,11 @@ As **consultas** exploram **leitura híbrida** quando necessário: em especial, 
 
 | Padrão | Implementação |
 |--------|---------------|
-| CQRS (Command/Query Separation) | Commands: `EnqueueTransactionCommand`, `ExecuteTransactionCommand`; Queries: `GetAllTransactionsQuery`, `GetTransactionByIdQuery` |
+| CQRS (Command/Query Separation) | Commands: `EnqueueTransaction`, `ExecuteTransaction`; Queries: `GetAllTransactionsQuery`, `GetTransactionByIdQuery` |
 | Pipeline Behavior (validação) | `ValidationBehavior<TRequest,TResponse>` — validação automática via FluentValidation antes de cada handler |
-| Pipeline Behavior (auditoria) | `AuditBehavior<TRequest,TResponse>` — define metadados no `IAuditContext` para comandos `IAuditableCommand` |
+| Pipeline Behavior (auditoria) | `AuditBehavior<TRequest,TResponse>` — define metadados no `IAuditContext` para comandos que implementam `IAuditable` |
 | Generic Enqueue Handler | `EnqueueCommandHandler<TCommand,TMessage>` — reutilizável para qualquer command que implemente `IEnqueueCommand<TMessage>` |
-| Application Event (MediatR INotification) | `TransactionProcessedEvent` desacopla persistência de publicação no broker |
+| Publicação pós-commit | `CommandHandlerBase` publica diretamente no `IEventBus` via callback `AfterCommit` após o commit |
 | Idempotência | `IEnqueueCommand.IdempotencyKey` + `ITaskCacheService` com TTL 24h |
 | Leitura Híbrida | `GetTransactionByIdHandler`: Mongo → Outbox pendente → Relacional |
 
@@ -42,7 +42,7 @@ classDiagram
 
   class CommandBase {
     <<abstract record>>
-    note: Application.Common.Commands\nIAuditableCommand; IRequest declarado em cada comando
+    note: Application.Common.Commands\nIAuditable; IRequest declarado em cada comando
     +string UserId
     +DateTime OccurredAt
   }
@@ -52,7 +52,7 @@ classDiagram
     +BuildMessage(Guid taskId) TMessage
   }
 
-  class EnqueueTransactionCommand {
+  class EnqueueTransaction {
     +TransactionType Type
     +decimal Amount
     +string? Description
@@ -87,15 +87,15 @@ classDiagram
     <<interface>>
   }
 
-  class IPublisher {
-    <<interface>>
-  }
-
   class IUnitOfWork {
     <<interface>>
   }
 
   class ITaskCacheService {
+    <<interface>>
+  }
+
+  class IEventBus {
     <<interface>>
   }
 
@@ -113,17 +113,9 @@ classDiagram
     <<interface>>
   }
 
-  class TransactionProcessedHandler {
-    <<sealed>>
-  }
-
-  class IEventBus {
-    <<interface>>
-  }
-
-  CommandBase <|-- EnqueueTransactionCommand : herda
-  CommandBase <|-- ExecuteTransactionCommand : herda
-  IEnqueueCommand~TMessage~ <|.. EnqueueTransactionCommand : implementa
+  CommandBase <|-- EnqueueTransaction : herda
+  CommandBase <|-- ExecuteTransaction : herda
+  IEnqueueCommand~TMessage~ <|.. EnqueueTransaction : implementa
   IRequestHandler~TRequest,TResponse~ <|.. EnqueueCommandHandler~TCommand,TMessage~ : implementa
   IRequestHandler~TRequest,TResponse~ <|.. ExecuteTransactionHandler : implementa
   IPipelineBehavior~TRequest,TResponse~ <|.. ValidationBehavior~TRequest,TResponse~ : implementa
@@ -133,12 +125,12 @@ classDiagram
   end note
 
   note for ExecuteTransactionHandler
-    Especialização: TRequest = ExecuteTransactionCommand; TResponse = Unit (MediatR).
+    Especialização: TRequest = ExecuteTransaction; TResponse = Unit (MediatR).
   end note
 
   ExecuteTransactionHandler ..> IWriteRepository~Transaction~ : usa
   ExecuteTransactionHandler ..> IOutboxRepository : usa
-  ExecuteTransactionHandler ..> IPublisher : usa
+  ExecuteTransactionHandler ..> IEventBus : usa (via CommandHandlerBase AfterCommit)
   ExecuteTransactionHandler ..> IUnitOfWork : usa
   ExecuteTransactionHandler ..> ITaskCacheService : usa
   ExecuteTransactionHandler ..> IAuditContext : usa
@@ -148,13 +140,11 @@ classDiagram
   GetTransactionByIdHandler ..> IDocumentsReadRepository~TransactionDocument~ : usa
   GetTransactionByIdHandler ..> IReadRepository~Transaction~ : usa
   GetTransactionByIdHandler ..> IOutboxRepository : usa
-
-  TransactionProcessedHandler ..> IEventBus : usa
 ```
 
 ---
 
-## Diagrama de Sequência — EnqueueTransactionCommand
+## Diagrama de Sequência — EnqueueTransaction
 
 Fluxo completo do enqueue: verificação de idempotência, registro da tarefa como pendente, montagem da mensagem, publicação no broker e amarração chave de idempotência ao `taskId`.
 
@@ -164,13 +154,13 @@ sequenceDiagram
   participant Cliente
   participant Mediator as IMediator
   participant VB as ValidationBehavior
-  participant V as IValidator~EnqueueTransactionCommand~
+  participant V as IValidator~EnqueueTransaction~
   participant H as EnqueueCommandHandler
   participant Cache as ITaskCacheService
   participant Bus as IEventBus
   participant Broker as Message broker
 
-  Cliente->>Mediator: Send(EnqueueTransactionCommand)
+  Cliente->>Mediator: Send(EnqueueTransaction)
   Mediator->>VB: Handle (pipeline)
   VB->>V: ValidateAsync(command)
   V-->>VB: valid / failures
@@ -196,9 +186,9 @@ sequenceDiagram
 
 ---
 
-## Diagrama de Sequência — ExecuteTransactionCommand
+## Diagrama de Sequência — ExecuteTransaction
 
-Persistência transacional com **outbox**, atualização do cache de tarefa em sucesso e notificação de domínio repassada ao broker via `TransactionProcessedHandler`.
+Persistência transacional com **outbox**, atualização do cache de tarefa em sucesso e publicação do evento no broker via `IEventBus` (callback `AfterCommit` de `CommandHandlerBase`).
 
 ```mermaid
 sequenceDiagram
@@ -210,11 +200,9 @@ sequenceDiagram
   participant WR as IWriteRepository~Transaction~
   participant OB as IOutboxRepository
   participant Cache as ITaskCacheService
-  participant Pub as IPublisher
-  participant TPH as TransactionProcessedHandler
   participant Bus as IEventBus
 
-  Consumer->>Mediator: Send(ExecuteTransactionCommand)
+  Consumer->>Mediator: Send(ExecuteTransaction)
   Mediator->>H: Handle(command)
 
   H->>UoW: BeginTransactionAsync()
@@ -232,9 +220,7 @@ sequenceDiagram
   H->>UoW: CommitAsync()
 
   H->>Cache: SetSuccessAsync(taskId, payload)
-  H->>Pub: Publish(TransactionProcessedEvent)
-  Pub->>TPH: Handle(TransactionProcessedEvent)
-  TPH->>Bus: PublishAsync(Payload)
+  H->>Bus: PublishAsync(TransactionProcessedMessage) via AfterCommit
 
   alt exceção após BeginTransaction
     H->>UoW: RollbackAsync()

@@ -11,4 +11,6 @@ WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8080/health/liveness || exit 1
 ENTRYPOINT ["dotnet", "ArchChallenge.Dashboard.Api.dll"]

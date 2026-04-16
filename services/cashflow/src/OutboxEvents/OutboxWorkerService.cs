@@ -1,9 +1,9 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using ArchChallenge.CashFlow.Domain.Shared.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging.Workers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Agents.Outbox.Events;
@@ -30,64 +30,25 @@ public sealed class OutboxWorkerService(
     IDocumentProjectionWriter     projectionWriter,
     IOptions<OutboxWorkerOptions> options,
     IHostEnvironment              hostEnvironment,
-    ILogger<OutboxWorkerService>  logger) : BackgroundService
+    ILogger<OutboxWorkerService>  logger)
+    : OutboxWorkerBase<OutboxEvent>(hostEnvironment, logger)
 {
-    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     private readonly OutboxWorkerOptions _options = options.Value;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string WorkerName            => nameof(OutboxWorkerService);
+    protected override int    PollingIntervalSeconds => _options.PollingIntervalSeconds;
+    protected override int    BatchSize              => _options.BatchSize;
+    protected override int    MaxRetries             => _options.MaxRetries;
+    protected override IServiceScopeFactory ScopeFactory => scopeFactory;
+
+    protected override async Task<IReadOnlyList<OutboxEvent>> FetchPendingAsync(
+        IServiceScope scope, CancellationToken cancellationToken)
     {
-        logger.LogInformation("[OutboxWorkerService] started — polling every {Interval}s, batch size {BatchSize}.",
-            _options.PollingIntervalSeconds, _options.BatchSize);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await ProcessPendingEventsAsync(stoppingToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogError(ex, "Unexpected error in the OutboxWorker cycle.");
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken);
-        }
-
-        logger.LogInformation("[OutboxWorkerService] stopped.");
+        var repo = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
+        return await repo.GetPendingAsync(_options.BatchSize, _options.MaxRetries, cancellationToken);
     }
 
-    private async Task ProcessPendingEventsAsync(CancellationToken cancellationToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var outboxRepo        = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-        var pending = await outboxRepo.GetPendingAsync(_options.BatchSize, cancellationToken);
-
-        if (hostEnvironment.IsEnvironment("Local"))
-        {
-            using (OutboxPollCycleLogging.BeginPollCycleScope())
-            {
-                logger.LogInformation(
-                    "[OutboxWorker] poll cycle — pending {Count}: {Snapshot}",
-                    pending.Count,
-                    SerializeOutboxPendingSnapshot(pending));
-            }
-        }
-
-        if (pending.Count == 0) return;
-
-        foreach (var outboxEvent in pending)
-            await ProcessSingleEventAsync(outboxEvent, cancellationToken);
-
-        await outboxRepo.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task ProcessSingleEventAsync(OutboxEvent outboxEvent, CancellationToken cancellationToken)
+    protected override async Task ProcessSingleAsync(OutboxEvent outboxEvent, CancellationToken cancellationToken)
     {
         try
         {
@@ -118,24 +79,9 @@ public sealed class OutboxWorkerService(
         }
     }
 
-    private static string SerializeOutboxPendingSnapshot(IReadOnlyList<OutboxEvent> rows)
+    protected override async Task PersistChangesAsync(IServiceScope scope, CancellationToken cancellationToken)
     {
-        var snapshot = rows.Select(static r => new OutboxSnapshotRow(
-            r.Id,
-            r.EventType,
-            r.CreatedAt,
-            r.RetryCount,
-            r.Processed,
-            r.Payload));
-
-        return JsonSerializer.Serialize(snapshot, SnapshotJsonOptions);
+        var repo = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
+        await repo.SaveChangesAsync(cancellationToken);
     }
-
-    private sealed record OutboxSnapshotRow(
-        Guid Id,
-        string EventType,
-        DateTime CreatedAt,
-        int RetryCount,
-        bool Processed,
-        string Payload);
 }

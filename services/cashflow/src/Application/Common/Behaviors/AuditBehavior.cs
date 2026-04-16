@@ -12,7 +12,7 @@ public sealed class AuditBehavior<TRequest, TResponse>(IAuditContext auditContex
         TRequest request, RequestHandlerDelegate<TResponse> next, 
         CancellationToken cancellationToken)
     {
-        if (request is Base cmd && request is IAuditable)
+        if (request is CommandBase cmd && request is IAuditable)
             auditContext.SetMetadata(cmd.UserId, cmd.OccurredAt);
 
         return next(cancellationToken);

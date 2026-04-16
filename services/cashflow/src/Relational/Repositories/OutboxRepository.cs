@@ -15,10 +15,11 @@ public class OutboxRepository(CashFlowDbContext context) : IOutboxRepository
 
     public async Task<IReadOnlyList<OutboxEvent>> GetPendingAsync(
         int batchSize           = 50,
+        int maxRetries          = 5,
         CancellationToken cancellationToken = default)
         => await context.OutboxEvents
             .TagWith(OutboxWorkerEfQueryTags.PendingBatchQueryMarker)
-            .Where(o => !o.Processed && o.RetryCount < 5)
+            .Where(o => !o.Processed && o.RetryCount < maxRetries)
             .OrderBy(o => o.CreatedAt)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
@@ -29,6 +30,7 @@ public class OutboxRepository(CashFlowDbContext context) : IOutboxRepository
     public async Task<bool> HasPendingForAggregateAsync(
         string            eventType,
         Guid              aggregateId,
+        int               maxRetries        = 5,
         CancellationToken cancellationToken = default)
     {
         var idInPayload = aggregateId.ToString("D");
@@ -36,7 +38,7 @@ public class OutboxRepository(CashFlowDbContext context) : IOutboxRepository
             .AsNoTracking()
             .AnyAsync(
                 o => !o.Processed
-                     && o.RetryCount < 5
+                     && o.RetryCount < maxRetries
                      && o.EventType == eventType
                      && o.Payload.Contains(idInPayload),
                 cancellationToken);

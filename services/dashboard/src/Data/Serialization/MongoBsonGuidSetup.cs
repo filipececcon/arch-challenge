@@ -2,7 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 
-namespace ArchChallenge.Dashboard.Data.Serialization;
+namespace ArchChallenge.Dashboard.Infrastructure.Data.Serialization;
 
 /// <summary>
 /// Representação BSON explícita para <see cref="Guid"/> em filtros e documentos.

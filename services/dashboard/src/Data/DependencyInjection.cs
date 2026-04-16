@@ -1,11 +1,11 @@
 using ArchChallenge.Dashboard.Application.Abstractions;
-using ArchChallenge.Dashboard.Data.Services;
-using ArchChallenge.Dashboard.Data.Serialization;
+using ArchChallenge.Dashboard.Infrastructure.Data.Serialization;
+using ArchChallenge.Dashboard.Infrastructure.Data.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
-namespace ArchChallenge.Dashboard.Data;
+namespace ArchChallenge.Dashboard.Infrastructure.Data;
 
 public static class DependencyInjection
 {
@@ -23,6 +23,7 @@ public static class DependencyInjection
             sp.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
 
         services.AddScoped<IDailyBalanceReadStore, DailyBalanceReadStore>();
+        services.AddScoped<IStatementReadStore, StatementReadStore>();
         services.AddScoped<ITransactionProcessedProcessor, TransactionProcessedProcessor>();
 
         return services;

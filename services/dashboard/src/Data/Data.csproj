@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>ArchChallenge.Dashboard.Data</RootNamespace>
-    <AssemblyName>ArchChallenge.Dashboard.Data</AssemblyName>
+    <RootNamespace>ArchChallenge.Dashboard.Infrastructure.Data</RootNamespace>
+    <AssemblyName>ArchChallenge.Dashboard.Infrastructure.Data</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\shared\ArchChallenge.Contracts\ArchChallenge.Contracts.csproj" />
     <ProjectReference Include="..\Application\Application.csproj" />
+    <ProjectReference Include="..\Shared\Shared.csproj" />
   </ItemGroup>
 
 </Project>

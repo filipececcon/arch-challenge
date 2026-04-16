@@ -318,6 +318,26 @@ services:
       - cashflow-network
 
   # ─────────────────────────────────────────────
+  # rabbitmq-exporter — métricas do RabbitMQ para o Prometheus
+  # Acesso: http://localhost:9419/metrics  (dashboard Grafana ~10991)
+  # ─────────────────────────────────────────────
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:1.0.0-RC19
+    container_name: cashflow-rabbitmq-exporter
+    profiles: [observability]
+    restart: unless-stopped
+    environment:
+      RABBIT_URL: "amqp://rabbit:rabbit@rabbitmq:5672/"
+      PUBLISH_PORT: "9419"
+    ports:
+      - "9419:9419"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - cashflow-network
+
+  # ─────────────────────────────────────────────
   # elasticsearch-exporter — métricas do Elasticsearch para o Prometheus
   # Acesso: http://localhost:9114/metrics
   # ─────────────────────────────────────────────

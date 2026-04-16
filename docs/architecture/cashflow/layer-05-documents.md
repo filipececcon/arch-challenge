@@ -1,5 +1,7 @@
 # Camada Infrastructure.Data.Documents — ArchChallenge.CashFlow.Infrastructure.Data.Documents
 
+> **Contexto:** esta camada cobre o pilar **dados não relacionais (documentos)** na visão por capacidade. Mapa dos três tipos de armazenamento: **[data/README.md](../../data/README.md)**.
+
 ---
 
 ## Responsabilidades

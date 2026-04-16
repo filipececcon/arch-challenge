@@ -28,7 +28,7 @@ O `docker-compose.yml` na raiz organiza todos os serviços em **profiles**, perm
 | Profile         | Serviços incluídos                                                                                                                                    | Quando usar                                              |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `infra`         | `postgres`, `mongodb`, `rabbitmq`, `redis`, `keycloak`                                                                                                | Base para qualquer cenário; sempre necessário            |
-| `observability` | `elasticsearch`, `kibana`, `apm-server`, `prometheus`, `grafana`, `postgres-exporter`, `mongodb-exporter`, `redis-exporter`, `elasticsearch-exporter` | Métricas, logs e traces — opcional em desenvolvimento    |
+| `observability` | `elasticsearch`, `kibana`, `apm-server`, `prometheus`, `grafana`, `postgres-exporter`, `mongodb-exporter`, `redis-exporter`, `elasticsearch-exporter`, `rabbitmq-exporter` | Métricas, logs e traces — opcional em desenvolvimento    |
 | `tools`         | `pgadmin`, `mongo-express`                                                                                                                            | UIs administrativas de banco — opcional                  |
 | `apps`          | `cashflow-api`, `dashboard-api`, `gateway`, `frontend`                                                                                                | APIs e frontend em contêiner — para testes ponta a ponta |
 
@@ -49,7 +49,7 @@ docker compose --profile infra --profile observability up -d
 docker compose --profile infra --profile observability --profile tools --profile apps up -d
 ```
 
-**Atenção com exporters de infra no profile `observability`:** `postgres-exporter`, `mongodb-exporter` e `redis-exporter` dependem dos serviços do profile `infra`. Execute sempre com `--profile infra --profile observability` em conjunto.
+**Atenção com exporters de infra no profile `observability`:** `postgres-exporter`, `mongodb-exporter`, `redis-exporter`, `elasticsearch-exporter` e `rabbitmq-exporter` dependem dos serviços do profile `infra`. Execute sempre com `--profile infra --profile observability` em conjunto.
 
 **Volumes persistentes:** `postgres_data`, `rabbitmq_data`, `mongodb_data`, `redis_data`, `elasticsearch_data`, `prometheus_data`, `grafana_data`, `pgadmin_data`. Um `docker compose down -v` **apaga** também estes dados (incluindo índices e séries temporais locais).
 

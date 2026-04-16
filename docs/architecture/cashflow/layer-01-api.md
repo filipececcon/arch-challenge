@@ -12,7 +12,7 @@ O projeto **ArchChallenge.CashFlow.Api** é o host ASP.NET Core do serviço Cash
 - Roteamento de requisições para controllers e delegação de comandos e consultas via **MediatR** (`IMediator` / `ISender`).
 - Pipeline ASP.NET Core: autenticação JWT (Bearer), autorização, métricas HTTP expostas pelo **prometheus-net** no endpoint **`/metrics`**, e health checks em **`/health/liveness`** (processo vivo, sem checagens de dependência) e **`/health/readiness`** (PostgreSQL, MongoDB, Redis e RabbitMQ).
 - **Swagger/OpenAPI** com documentação interativa dos endpoints (configuração via extensões dedicadas).
-- **Localização** de mensagens conforme cabeçalho **Accept-Language**, aplicada por middleware na pipeline.
+- **Localização** de mensagens conforme cabeçalho **Accept-Language**, aplicada por middleware na pipeline (especificação e links para o código em [layer-10-i18n.md](./layer-10-i18n.md)).
 - **Middleware de exceções** centralizado (`ExceptionMiddleware`), que captura falhas não tratadas e devolve resposta HTTP consistente.
 - **Migração automática** do banco relacional na inicialização (`MigrateAsync`), garantindo schema atualizado antes de servir tráfego.
 - Endpoint **SSE** em **`GET /api/tasks/{taskId}`** para acompanhamento assíncrono do processamento de lançamentos enfileirados (stream `text/event-stream` com polling no cache a intervalos curtos até estado final).
@@ -97,7 +97,7 @@ sequenceDiagram
     C->>EM: POST /api/transactions
     EM->>JWT: encaminha pipeline
     JWT->>TC: requisição autenticada
-    TC->>M: Send(EnqueueTransactionCommand)
+    TC->>M: Send(EnqueueTransaction)
     M->>EH: Handle(command)
     EH->>TCS: registro de tarefa / idempotência
     EH->>EB: PublishAsync(mensagem)

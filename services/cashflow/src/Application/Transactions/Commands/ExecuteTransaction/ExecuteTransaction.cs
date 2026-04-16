@@ -7,4 +7,4 @@ public record ExecuteTransaction(
     TransactionType Type, 
     decimal Amount, 
     string? Description
-) : Base, IRequest, IAsyncCommand;
+) : CommandBase, IRequest, IAsyncCommand;

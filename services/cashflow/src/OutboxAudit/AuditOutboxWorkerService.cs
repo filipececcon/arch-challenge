@@ -1,10 +1,11 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ArchChallenge.CashFlow.Domain.Shared.Audit;
 using ArchChallenge.CashFlow.Domain.Shared.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging.Workers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Outbox.Audit;
@@ -17,71 +18,26 @@ public sealed class AuditOutboxWorkerService(
     IAuditWriter                      writer,
     IOptions<AuditWorkerOptions>      options,
     IHostEnvironment                  hostEnvironment,
-    ILogger<AuditOutboxWorkerService> logger) : BackgroundService
+    ILogger<AuditOutboxWorkerService> logger)
+    : OutboxWorkerBase<AuditEvent>(hostEnvironment, logger)
 {
-    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     private readonly AuditWorkerOptions _options = options.Value;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override string WorkerName            => nameof(AuditOutboxWorkerService);
+    protected override int    PollingIntervalSeconds => _options.PollingIntervalSeconds;
+    protected override int    BatchSize              => _options.BatchSize;
+    protected override int    MaxRetries             => _options.MaxRetries;
+    protected override IServiceScopeFactory ScopeFactory => scopeFactory;
+
+    protected override async Task<IReadOnlyList<AuditEvent>> FetchPendingAsync(
+        IServiceScope scope, CancellationToken cancellationToken)
     {
-        logger.LogInformation(
-            "[AuditOutboxWorker] started — polling every {Interval}s, batch size {BatchSize}.",
-            _options.PollingIntervalSeconds, _options.BatchSize);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await ProcessPendingAsync(stoppingToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogError(ex, "Unexpected error in the AuditOutboxWorker cycle.");
-            }
-
-            await Task
-                .Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken)
-                .ConfigureAwait(false);
-        }
-
-        logger.LogInformation("[AuditOutboxWorker] stopped.");
-    }
-
-    private async Task ProcessPendingAsync(CancellationToken cancellationToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-
         var repo = scope.ServiceProvider.GetRequiredService<IAuditOutboxRepository>();
-
-        var pending = await repo.GetPendingAsync(_options.BatchSize, cancellationToken).ConfigureAwait(false);
-
-        if (hostEnvironment.IsEnvironment("Local"))
-        {
-            using (OutboxPollCycleLogging.BeginPollCycleScope())
-            {
-                logger.LogInformation(
-                    "[AuditOutboxWorker] poll cycle — pending {Count}: {Snapshot}",
-                    pending.Count,
-                    SerializeAuditPendingSnapshot(pending));
-            }
-        }
-
-        if (pending.Count == 0) return;
-
-        foreach (var row in pending)
-        {
-            await ProcessSingleAsync(row, cancellationToken).ConfigureAwait(false);
-        }
-
-        await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return await repo.GetPendingAsync(_options.BatchSize, _options.MaxRetries, cancellationToken)
+                         .ConfigureAwait(false);
     }
 
-    private async Task ProcessSingleAsync(AuditEvent row, CancellationToken cancellationToken)
+    protected override async Task ProcessSingleAsync(AuditEvent row, CancellationToken cancellationToken)
     {
         try
         {
@@ -105,26 +61,11 @@ public sealed class AuditOutboxWorkerService(
         }
     }
 
-    private static string SerializeAuditPendingSnapshot(IReadOnlyList<AuditEvent> rows)
+    protected override async Task PersistChangesAsync(IServiceScope scope, CancellationToken cancellationToken)
     {
-        var snapshot = rows.Select(static r => new AuditOutboxSnapshotRow(
-            r.Id,
-            r.EventType,
-            r.CreatedAt,
-            r.RetryCount,
-            r.Processed,
-            r.Payload));
-
-        return JsonSerializer.Serialize(snapshot, SnapshotJsonOptions);
+        var repo = scope.ServiceProvider.GetRequiredService<IAuditOutboxRepository>();
+        await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-
-    private sealed record AuditOutboxSnapshotRow(
-        Guid Id,
-        string EventType,
-        DateTime CreatedAt,
-        int RetryCount,
-        bool Processed,
-        string Payload);
 
     private static AuditEntry DeserializeEntry(string json)
     {

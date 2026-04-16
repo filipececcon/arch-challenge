@@ -1,5 +1,4 @@
 using ArchChallenge.Dashboard.Application.DailyBalances;
-using MediatR;
 
 namespace ArchChallenge.Dashboard.Application.DailyBalances.GetDailyBalanceByDate;
 

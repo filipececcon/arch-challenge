@@ -7,9 +7,8 @@ namespace ArchChallenge.CashFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/tasks")]
-public class TasksControllers(ITaskCacheService taskCache) : ControllerBase
+public class TasksController(ITaskCacheService taskCache) : ControllerBase
 {
-    
     /// <summary>
     /// Stream SSE que acompanha o status de processamento de uma transação enfileirada.
     /// Faz polling no cache a cada 500ms até obter um estado final (Success ou Failure).

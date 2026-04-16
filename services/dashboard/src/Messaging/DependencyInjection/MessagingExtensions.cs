@@ -1,10 +1,10 @@
-using ArchChallenge.Dashboard.Messaging.Consumers;
+using ArchChallenge.Dashboard.Infrastructure.CrossCutting.Messaging.Consumers;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 
-namespace ArchChallenge.Dashboard.Messaging.DependencyInjection;
+namespace ArchChallenge.Dashboard.Infrastructure.CrossCutting.Messaging.DependencyInjection;
 
 public static class MessagingExtensions
 {

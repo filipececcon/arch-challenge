@@ -189,12 +189,14 @@ As aplicações expõem métricas no padrão Prometheus via `prometheus-net.AspN
 O padrão **Exporter** é usado para todos os bancos: um container dedicado se conecta ao banco, lê suas estatísticas internas e as expõe em `/metrics` para o Prometheus raspar.
 
 
-| Banco         | Exporter                 | Porta | Principais métricas                                                 |
-| ------------- | ------------------------ | ----- | ------------------------------------------------------------------- |
-| PostgreSQL    | `postgres_exporter`      | 9187  | `pg_stat_activity_count`, `pg_up`, `pg_settings_max_connections`    |
-| MongoDB       | `mongodb_exporter`       | 9216  | `mongodb_ss_connections`, `mongodb_up`                              |
-| Redis         | `redis_exporter`         | 9121  | `redis_memory_used_bytes`, `redis_up`                               |
-| Elasticsearch | `elasticsearch_exporter` | 9114  | `elasticsearch_jvm_memory_`*, `elasticsearch_cluster_health_status` |
+| Banco / serviço | Exporter / origem        | Porta | Principais métricas                                                 |
+| --------------- | ------------------------ | ----- | ------------------------------------------------------------------- |
+| PostgreSQL      | `postgres_exporter`      | 9187  | `pg_stat_activity_count`, `pg_up`, `pg_settings_max_connections`    |
+| MongoDB         | `mongodb_exporter`       | 9216  | `mongodb_ss_connections`, `mongodb_up`                              |
+| Redis           | `redis_exporter`         | 9121  | `redis_memory_used_bytes`, `redis_up`                               |
+| Elasticsearch   | `elasticsearch_exporter` | 9114  | `elasticsearch_jvm_memory_`*, `elasticsearch_cluster_health_status` |
+| RabbitMQ        | `kbudde/rabbitmq-exporter` | 9419 | `queue_messages`, `rabbitmq_up` (nomes variam conforme o exporter)   |
+| immudb          | métricas nativas (`/metrics`) | 9497 | `go_*`, `grpc_server_handled_total`, etc.                          |
 
 
 ### Dashboards provisionados
@@ -202,12 +204,16 @@ O padrão **Exporter** é usado para todos os bancos: um container dedicado se c
 Os dashboards são provisionados automaticamente via `infra/grafana/provisioning/dashboards/` ao subir o Compose — sem importação manual:
 
 
-| Dashboard     | Fonte                | ID Grafana |
-| ------------- | -------------------- | ---------- |
-| PostgreSQL    | `postgres.json`      | 9628       |
-| MongoDB       | `mongodb.json`       | 7353       |
-| Redis         | `redis.json`         | 11835      |
-| Elasticsearch | `elasticsearch.json` | 14191      |
+| Dashboard        | Fonte                  | ID Grafana / notas |
+| ---------------- | ---------------------- | ------------------ |
+| PostgreSQL       | `postgres.json`        | 9628               |
+| MongoDB          | `mongodb.json`         | 7353               |
+| Redis            | `redis.json`           | 11835              |
+| Elasticsearch    | `elasticsearch.json`   | 14191              |
+| prometheus-net   | `prometheus-net.json`  | 10427 (métricas `prometheus-net` nas APIs com `/metrics`) |
+| Prometheus       | `prometheus.json`      | 15489 (saúde do servidor Prometheus) |
+| RabbitMQ         | `rabbitmq.json`        | 10991 (compatível com `kbudde/rabbitmq-exporter`) |
+| immudb           | `immudb.json`          | Painel interno (Go/gRPC, `job=immudb`) |
 
 
 ### Alertas configurados
@@ -260,6 +266,7 @@ Os alertas são gerenciados pelo **Grafana Alerting** (ver ADR-014), provisionad
 | mongodb-exporter       | `percona/mongodb_exporter:0.40`                        | 9216         | Exporta métricas do MongoDB para o Prometheus             |
 | redis-exporter         | `oliver006/redis_exporter:v1.62.0`                     | 9121         | Exporta métricas do Redis para o Prometheus               |
 | elasticsearch-exporter | `prometheuscommunity/elasticsearch-exporter:v1.7.0`    | 9114         | Exporta métricas do Elasticsearch para o Prometheus       |
+| rabbitmq-exporter      | `kbudde/rabbitmq-exporter:1.0.0-RC19`                  | 9419         | Exporta métricas do RabbitMQ para o Prometheus            |
 
 
 ---

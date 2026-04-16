@@ -1,7 +1,7 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace ArchChallenge.Dashboard.Data.Documents;
+namespace ArchChallenge.Dashboard.Infrastructure.Data.Documents;
 
 /// <summary>Read model: totais agregados por dia (UTC), chave <c>_id</c> = ISO yyyy-MM-dd.</summary>
 public sealed class DailyConsolidationDocument

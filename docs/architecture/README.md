@@ -93,6 +93,7 @@ A documentação detalhada de cada camada do serviço **Cashflow API** está dis
 
 | Camada | Arquivo |
 |--------|---------|
+| **Dados (capacidade)** — PostgreSQL, MongoDB, ImmuDB | [data/README.md](../data/README.md) |
 | Api | [layer-01-api.md](./cashflow/layer-01-api.md) |
 | Application | [layer-02-application.md](./cashflow/layer-02-application.md) |
 | Domain + Shared | [layer-03-domain.md](./cashflow/layer-03-domain.md) |
@@ -101,7 +102,8 @@ A documentação detalhada de cada camada do serviço **Cashflow API** está dis
 | Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./cashflow/layer-06-messaging.md) |
 | Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./cashflow/layer-07-caching.md) |
 | Infrastructure.CrossCutting.Security | [layer-08-security.md](./cashflow/layer-08-security.md) |
-| Infrastructure.CrossCutting.Audit | [layer-09-audit.md](./cashflow/layer-09-audit.md) |
+| Imutável — auditoria (Application + Immutable + OutboxAudit) | [layer-09-immutable.md](./cashflow/layer-09-immutable.md) |
+| I18n (mensagens e cultura) | [layer-10-i18n.md](./cashflow/layer-10-i18n.md) |
 
 ---
 
@@ -118,6 +120,7 @@ A documentação detalhada de cada camada do serviço **Cashflow API** está dis
 | [ADR-008](../decisions/ADR-008-autenticacao-autorizacao-keycloak.md) | Autenticação e autorização com Keycloak | C2, C3-a |
 | [ADR-009](../decisions/ADR-009-api-gateway-ocelot.md) | API Gateway com Ocelot | C2, C3-a |
 | [ADR-010](../decisions/ADR-010-frontend-unificado-com-feature-modules.md) | Frontend unificado com feature modules lazy-loaded | C2 |
+| [ADR-016](../decisions/ADR-016-immudb-armazenamento-imutavel-auditoria.md) | ImmuDB como armazenamento imutável para auditoria (CashFlow) | — |
 
 ### Observabilidade
 

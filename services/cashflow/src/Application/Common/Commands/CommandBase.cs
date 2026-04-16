@@ -9,7 +9,7 @@ namespace ArchChallenge.CashFlow.Application.Common.Commands;
 /// <c>IRequest</c>, <c>IRequest{T}</c> ou <c>IEnqueueCommand{T}</c> para evitar conflito
 /// (ex.: <see cref="MediatR.IRequest"/> vs <c>IRequest&lt;EnqueueResult&gt;</c>).
 /// </remarks>
-public abstract record Base : IAuditable
+public abstract record CommandBase : IAuditable
 {
     public string UserId { get; set; } = string.Empty;
     public DateTime OccurredAt { get; set; } = DateTime.UtcNow;

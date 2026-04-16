@@ -10,7 +10,7 @@ namespace ArchChallenge.CashFlow.Application.Common.Commands;
 /// deixando <see cref="ExecuteAsync"/> como ponto de extensão para a regra de negócio.
 /// </summary>
 /// <typeparam name="TCommand">
-/// Command de execução — deve herdar <see cref="Base"/> e implementar <see cref="IAsyncCommand"/>.
+/// Command de execução — deve herdar <see cref="CommandBase"/> e implementar <see cref="IAsyncCommand"/>.
 /// </typeparam>
 /// <typeparam name="TAggregate">Raiz de agregação produzida pelo handler filho.</typeparam>
 /// <typeparam name="TMessage">Mensagem a ser enviada para o broker</typeparam>
@@ -22,7 +22,7 @@ public abstract class CommandHandlerBase<TCommand, TAggregate, TMessage>(
     IEventBus                  eventBus,
     IStringLocalizer<Messages> localizer)
     : IRequestHandler<TCommand>
-    where TCommand   : Base, IRequest, IAsyncCommand
+    where TCommand   : CommandBase, IRequest, IAsyncCommand
     where TAggregate : Entity, IAggregateRoot
     where TMessage : MessageBase
 {

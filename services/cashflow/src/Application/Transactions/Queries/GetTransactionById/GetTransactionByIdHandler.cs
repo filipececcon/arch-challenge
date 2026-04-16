@@ -30,7 +30,7 @@ public sealed class GetTransactionByIdHandler(
         var hasPendingSync = await outboxRepository.HasPendingForAggregateAsync(
             TransactionProcessedMessage.EventName,
             request.Id,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (!hasPendingSync)
         {

@@ -1,60 +1,58 @@
 using System.Globalization;
 using ArchChallenge.Contracts.Events;
-using ArchChallenge.Dashboard.Application.Abstractions;
-using ArchChallenge.Dashboard.Data.Documents;
+using ArchChallenge.Dashboard.Infrastructure.Data.Documents;
 using MongoDB.Driver;
 
-namespace ArchChallenge.Dashboard.Data.Services;
+namespace ArchChallenge.Dashboard.Infrastructure.Data.Services;
 
-public class TransactionProcessedProcessor : ITransactionProcessedProcessor
+public class TransactionProcessedProcessor(IMongoDatabase database) : ITransactionProcessedProcessor
 {
-    private readonly IMongoCollection<DailyConsolidationDocument> _daily;
-    private readonly IMongoCollection<ProcessedIntegrationEventDocument> _processed;
-
-    public TransactionProcessedProcessor(IMongoDatabase database)
-    {
-        _daily = database.GetCollection<DailyConsolidationDocument>(MongoDashboardCollections.DailyConsolidations);
-        _processed = database.GetCollection<ProcessedIntegrationEventDocument>(MongoDashboardCollections.ProcessedIntegrationEvents);
-    }
+    private readonly IMongoCollection<StatementLineDocument> _statement = database.GetCollection<StatementLineDocument>(MongoDashboardCollections.StatementLines);
+    private readonly IMongoCollection<DailyConsolidationDocument> _daily = database.GetCollection<DailyConsolidationDocument>(MongoDashboardCollections.DailyConsolidations);
 
     public async Task ProcessAsync(TransactionRegisteredIntegrationEvent message, CancellationToken cancellationToken)
     {
-        var filterProcessed = Builders<ProcessedIntegrationEventDocument>.Filter.Eq(e => e.Id, message.EventId);
-        var updateProcessed = Builders<ProcessedIntegrationEventDocument>.Update
-            .SetOnInsert(e => e.ProcessedAt, DateTime.UtcNow);
-
-        var ack = await _processed.UpdateOneAsync(
-            filterProcessed,
-            updateProcessed,
-            new UpdateOptions { IsUpsert = true },
-            cancellationToken);
-
-        if (ack.UpsertedId is null && ack.MatchedCount > 0)
-            return;
-
-        if (ack.UpsertedId is null)
-            throw new InvalidOperationException("Evento não pôde ser registrado de forma idempotente.");
-
         var occurredUtc = message.OccurredAt.Kind == DateTimeKind.Utc
             ? message.OccurredAt
             : message.OccurredAt.ToUniversalTime();
 
-        var day = DateOnly.FromDateTime(occurredUtc);
-        var dayId = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var dayId = DateOnly.FromDateTime(occurredUtc).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var type  = message.Payload.Type.ToUpperInvariant();
 
-        var amount = message.Payload.Amount;
-        decimal incCredit = 0, incDebit = 0;
-        if (string.Equals(message.Payload.Type, "CREDIT", StringComparison.OrdinalIgnoreCase))
-            incCredit = amount;
-        else if (string.Equals(message.Payload.Type, "DEBIT", StringComparison.OrdinalIgnoreCase))
-            incDebit = amount;
+        // Upsert da linha de extrato — idempotente pela chave _id = EventId (MongoDB garante unicidade).
+        var line = new StatementLineDocument
+        {
+            Id         = message.EventId,
+            Day        = dayId,
+            OccurredAt = occurredUtc,
+            Type       = type,
+            Amount     = message.Payload.Amount
+        };
 
-        var filterDay = Builders<DailyConsolidationDocument>.Filter.Eq(d => d.Id, dayId);
-        var updateDay = Builders<DailyConsolidationDocument>.Update
-            .Inc(d => d.TotalCredits, incCredit)
-            .Inc(d => d.TotalDebits, incDebit)
-            .Set(d => d.UpdatedAt, DateTime.UtcNow);
+        await _statement.ReplaceOneAsync(
+            Builders<StatementLineDocument>.Filter.Eq(l => l.Id, message.EventId),
+            line,
+            new ReplaceOptions { IsUpsert = true },
+            cancellationToken);
 
-        await _daily.UpdateOneAsync(filterDay, updateDay, new UpdateOptions { IsUpsert = true }, cancellationToken);
+        // Recalcula o consolidado do dia a partir das linhas — fonte única de verdade.
+        // Set em vez de Inc: o resultado é sempre correto, mesmo em reentregas.
+        var dayLines = await _statement
+            .Find(Builders<StatementLineDocument>.Filter.Eq(l => l.Day, dayId))
+            .ToListAsync(cancellationToken);
+
+        var totalCredits = dayLines.Where(l => l.Type == "CREDIT").Sum(l => l.Amount);
+        var totalDebits  = dayLines.Where(l => l.Type == "DEBIT").Sum(l => l.Amount);
+
+        var update = Builders<DailyConsolidationDocument>.Update
+            .Set(d => d.TotalCredits, totalCredits)
+            .Set(d => d.TotalDebits,  totalDebits)
+            .Set(d => d.UpdatedAt,    DateTime.UtcNow);
+
+        await _daily.UpdateOneAsync(
+            Builders<DailyConsolidationDocument>.Filter.Eq(d => d.Id, dayId),
+            update,
+            new UpdateOptions { IsUpsert = true },
+            cancellationToken);
     }
 }

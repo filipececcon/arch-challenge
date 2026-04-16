@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>ArchChallenge.Dashboard.Messaging</RootNamespace>
-    <AssemblyName>ArchChallenge.Dashboard.Messaging</AssemblyName>
+    <RootNamespace>ArchChallenge.Dashboard.Infrastructure.CrossCutting.Messaging</RootNamespace>
+    <AssemblyName>ArchChallenge.Dashboard.Infrastructure.CrossCutting.Messaging</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,8 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\shared\ArchChallenge.Contracts\ArchChallenge.Contracts.csproj" />
-    <ProjectReference Include="..\Application\Application.csproj" />
+    <ProjectReference Include="..\Data\Data.csproj" />
   </ItemGroup>
 
 </Project>

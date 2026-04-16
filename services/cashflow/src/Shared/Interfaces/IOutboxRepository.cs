@@ -15,10 +15,11 @@ public interface IOutboxRepository
 
     /// <summary>
     /// Retorna os próximos <paramref name="batchSize"/> eventos não processados,
-    /// com menos de 5 tentativas falhas, ordenados por data de criação.
+    /// com menos de <paramref name="maxRetries"/> tentativas falhas, ordenados por data de criação.
     /// </summary>
     Task<IReadOnlyList<OutboxEvent>> GetPendingAsync(
         int batchSize           = 50,
+        int maxRetries          = 5,
         CancellationToken cancellationToken = default);
 
     /// <summary>Persiste as alterações (markProcessed / incrementRetry).</summary>
@@ -32,6 +33,7 @@ public interface IOutboxRepository
     Task<bool> HasPendingForAggregateAsync(
         string            eventType,
         Guid              aggregateId,
+        int               maxRetries        = 5,
         CancellationToken cancellationToken = default);
 }
 

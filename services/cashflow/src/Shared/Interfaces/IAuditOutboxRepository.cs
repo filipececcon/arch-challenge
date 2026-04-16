@@ -4,7 +4,10 @@ namespace ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 
 public interface IAuditOutboxRepository
 {
-    Task<IReadOnlyList<AuditEvent>> GetPendingAsync(int batchSize= 50, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AuditEvent>> GetPendingAsync(
+        int batchSize           = 50,
+        int maxRetries          = 5,
+        CancellationToken cancellationToken = default);
 
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

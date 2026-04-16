@@ -1,9 +1,9 @@
 using ArchChallenge.Contracts.Events;
-using ArchChallenge.Dashboard.Application.Abstractions;
+using ArchChallenge.Dashboard.Infrastructure.Data;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace ArchChallenge.Dashboard.Messaging.Consumers;
+namespace ArchChallenge.Dashboard.Infrastructure.CrossCutting.Messaging.Consumers;
 
 public class TransactionProcessedConsumer(IServiceScopeFactory scopeFactory)
     : IConsumer<TransactionRegisteredIntegrationEvent>

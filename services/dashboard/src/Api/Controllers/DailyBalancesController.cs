@@ -1,14 +1,13 @@
 using ArchChallenge.Dashboard.Application.DailyBalances;
 using ArchChallenge.Dashboard.Application.DailyBalances.GetDailyBalanceByDate;
 using ArchChallenge.Dashboard.Application.DailyBalances.ListDailyBalances;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
 
 namespace ArchChallenge.Dashboard.Api.Controllers;
 
 [ApiController]
 [Route("api/daily-balances")]
 [Produces("application/json")]
+[Authorize]
 public class DailyBalancesController(IMediator mediator) : ControllerBase
 {
     /// <summary>Consolidado de um dia (UTC), se existir.</summary>

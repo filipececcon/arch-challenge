@@ -4,7 +4,7 @@ using ArchChallenge.CashFlow.Domain.Enums;
 namespace ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 
 public record EnqueueTransaction(TransactionType Type, decimal Amount, string? Description)
-    : Base, IEnqueueCommand<EnqueueTransactionMessage>
+    : CommandBase, IEnqueueCommand<EnqueueTransactionMessage>
 {
     public Guid? IdempotencyKey { get; init; }
 

@@ -20,10 +20,6 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
 
         if (failures.Count == 0) return await next(cancellationToken);
 
-        var notifications = failures
-            .Select(f => new Notification(f.PropertyName, f.ErrorMessage))
-            .ToList();
-
         throw new ValidationException(failures);
     }
 }

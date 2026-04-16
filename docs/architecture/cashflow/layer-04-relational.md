@@ -1,5 +1,7 @@
 # Camada Infrastructure.Data.Relational — ArchChallenge.CashFlow.Infrastructure.Data.Relational
 
+> **Contexto:** esta camada cobre o pilar **dados relacionais** na visão por capacidade. Mapa dos três tipos de armazenamento (PostgreSQL, MongoDB, ImmuDB): **[data/README.md](../../data/README.md)**.
+
 Este documento descreve a camada **Infrastructure.Data.Relational** (`ArchChallenge.CashFlow.Infrastructure.Data.Relational`) do serviço Cashflow: persistência relacional com EF Core e Npgsql, repositórios de leitura e escrita, unidade de trabalho com transações explícitas, **Transactional Outbox** para projeção em MongoDB e migração automática do banco na inicialização da aplicação.
 
 ---
@@ -37,6 +39,7 @@ classDiagram
     class CashFlowDbContext {
         +DbSet~Transaction~ Transactions
         +DbSet~OutboxEvent~ OutboxEvents
+        +DbSet~AuditEvent~ AuditOutboxEvents
     }
 
     class IReadRepository~T~ {
@@ -161,7 +164,7 @@ O worker cria um **novo escopo de serviços** por ciclo (por exemplo, via `IServ
 
 ---
 
-## Diagrama de Sequência — ExecuteTransactionCommand (escrita transacional)
+## Diagrama de Sequência — ExecuteTransaction (escrita transacional)
 
 O fluxo abaixo corresponde ao `ExecuteTransactionHandler`: escrita **transacional** que persiste o agregado e o evento de outbox no mesmo `IDbTransaction`, depois atualiza o cache de tarefa com sucesso (o handler publica o evento de domínio após o commit; não está no diagrama para manter o foco na camada relacional).
 
