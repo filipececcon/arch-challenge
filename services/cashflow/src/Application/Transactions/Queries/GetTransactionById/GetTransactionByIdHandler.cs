@@ -1,4 +1,5 @@
 using ArchChallenge.CashFlow.Infrastructure.Data.Documents.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 
@@ -9,26 +10,63 @@ namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransaction
 public sealed class GetTransactionByIdHandler(
     IDocumentsReadRepository<TransactionDocument> documentsRepository,
     IReadRepository<Transaction>                relationalRepository,
-    IOutboxRepository                           outboxRepository)
+    IOutboxRepository                           outboxRepository,
+    ILogger<GetTransactionByIdHandler>          logger)
     : IRequestHandler<GetTransactionByIdQuery, GetTransactionByIdResult?>
 {
     public async Task<GetTransactionByIdResult?> Handle(GetTransactionByIdQuery request, CancellationToken cancellationToken)
     {
         var document = await documentsRepository.FindOneByIdAsync(request.Id, cancellationToken);
 
-        if (document is not null) return GetTransactionByIdFactory.Create(document);
-        
+        if (document is not null)
+        {
+            logger.LogInformation(
+                "GetTransactionById: result loaded from {ReadSource}. TransactionId={TransactionId}",
+                ReadSource.MongoDb,
+                request.Id);
+            return GetTransactionByIdFactory.Create(document);
+        }
+
         var hasPendingSync = await outboxRepository.HasPendingForAggregateAsync(
             TransactionProcessedMessage.EventName,
             request.Id,
             cancellationToken);
 
-        if (!hasPendingSync) return null;
+        if (!hasPendingSync)
+        {
+            logger.LogDebug(
+                "GetTransactionById: no Mongo document and no pending outbox; no additional read. TransactionId={TransactionId}, ReadSource={ReadSource}",
+                request.Id,
+                ReadSource.NoneNoPendingOutbox);
+            return null;
+        }
 
         var spec = new TransactionByIdSpec(request.Id);
 
         var entities = await relationalRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
-        return entities is null ? null : GetTransactionByIdFactory.Create(entities);
+        if (entities is null)
+        {
+            logger.LogWarning(
+                "GetTransactionById: pending outbox but entity not found in relational store. TransactionId={TransactionId}, ReadSource={ReadSource}",
+                request.Id,
+                ReadSource.NonePendingOutboxEntityMissing);
+            return null;
+        }
+
+        logger.LogInformation(
+            "GetTransactionById: result loaded from {ReadSource}. TransactionId={TransactionId}",
+            ReadSource.Relational,
+            request.Id);
+
+        return GetTransactionByIdFactory.Create(entities);
+    }
+
+    private static class ReadSource
+    {
+        public const string MongoDb                        = nameof(MongoDb);
+        public const string Relational                     = nameof(Relational);
+        public const string NoneNoPendingOutbox            = nameof(NoneNoPendingOutbox);
+        public const string NonePendingOutboxEntityMissing = nameof(NonePendingOutboxEntityMissing);
     }
 }

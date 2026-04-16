@@ -1,7 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ArchChallenge.CashFlow.Domain.Shared.Audit;
 using ArchChallenge.CashFlow.Domain.Shared.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Outbox.Audit;
@@ -13,8 +16,15 @@ public sealed class AuditOutboxWorkerService(
     IServiceScopeFactory              scopeFactory,
     IAuditWriter                      writer,
     IOptions<AuditWorkerOptions>      options,
+    IHostEnvironment                  hostEnvironment,
     ILogger<AuditOutboxWorkerService> logger) : BackgroundService
 {
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     private readonly AuditWorkerOptions _options = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -45,20 +55,29 @@ public sealed class AuditOutboxWorkerService(
     private async Task ProcessPendingAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        
+
         var repo = scope.ServiceProvider.GetRequiredService<IAuditOutboxRepository>();
-        
-        var pending= await repo.GetPendingAsync(_options.BatchSize, cancellationToken).ConfigureAwait(false);
+
+        var pending = await repo.GetPendingAsync(_options.BatchSize, cancellationToken).ConfigureAwait(false);
+
+        if (hostEnvironment.IsEnvironment("Local"))
+        {
+            using (OutboxPollCycleLogging.BeginPollCycleScope())
+            {
+                logger.LogInformation(
+                    "[AuditOutboxWorker] poll cycle — pending {Count}: {Snapshot}",
+                    pending.Count,
+                    SerializeAuditPendingSnapshot(pending));
+            }
+        }
 
         if (pending.Count == 0) return;
-
-        logger.LogDebug("[AuditOutboxWorker] {Count} pending audit row(s).", pending.Count);
 
         foreach (var row in pending)
         {
             await ProcessSingleAsync(row, cancellationToken).ConfigureAwait(false);
         }
-        
+
         await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -72,9 +91,9 @@ public sealed class AuditOutboxWorkerService(
 
             row.MarkProcessed();
 
-            logger.LogDebug(
-                "[AuditOutbox] {AuditId} ({AggregateType}/{AggregateId}) written to immudb.",
-                entry.AuditId, entry.AggregateType, entry.AggregateId);
+            logger.LogInformation(
+                "[AuditOutbox] persisted to immudb — OutboxEventId={OutboxEventId}, AuditId={AuditId}, AggregateType={AggregateType}, AggregateId={AggregateId}, EventName={EventName}",
+                row.Id, entry.AuditId, entry.AggregateType, entry.AggregateId, entry.EventName);
         }
         catch (Exception ex)
         {
@@ -85,6 +104,27 @@ public sealed class AuditOutboxWorkerService(
                 row.Id, row.RetryCount, _options.MaxRetries);
         }
     }
+
+    private static string SerializeAuditPendingSnapshot(IReadOnlyList<AuditEvent> rows)
+    {
+        var snapshot = rows.Select(static r => new AuditOutboxSnapshotRow(
+            r.Id,
+            r.EventType,
+            r.CreatedAt,
+            r.RetryCount,
+            r.Processed,
+            r.Payload));
+
+        return JsonSerializer.Serialize(snapshot, SnapshotJsonOptions);
+    }
+
+    private sealed record AuditOutboxSnapshotRow(
+        Guid Id,
+        string EventType,
+        DateTime CreatedAt,
+        int RetryCount,
+        bool Processed,
+        string Payload);
 
     private static AuditEntry DeserializeEntry(string json)
     {

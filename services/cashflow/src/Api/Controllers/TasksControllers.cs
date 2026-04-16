@@ -1,6 +1,6 @@
 using System.Text.Json;
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
 using ArchChallenge.CashFlow.Application.Common.Tasks;
+using ArchChallenge.CashFlow.Application.Utils;
 using TaskStatus = ArchChallenge.CashFlow.Application.Common.Tasks.TaskStatus;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
@@ -9,10 +9,6 @@ namespace ArchChallenge.CashFlow.Api.Controllers;
 [Route("api/tasks")]
 public class TasksControllers(ITaskCacheService taskCache) : ControllerBase
 {
-    private static readonly JsonSerializerOptions SseJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
     
     /// <summary>
     /// Stream SSE que acompanha o status de processamento de uma transação enfileirada.
@@ -55,7 +51,7 @@ public class TasksControllers(ITaskCacheService taskCache) : ControllerBase
 
     private async Task WriteSseAsync(object payload, CancellationToken cancellationToken)
     {
-        var json = JsonSerializer.Serialize(payload, SseJsonOptions);
+        var json = JsonSerializer.Serialize(payload, SerializeUtils.EntityJsonOptions);
         await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
         await Response.Body.FlushAsync(cancellationToken);
     }

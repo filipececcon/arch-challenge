@@ -19,7 +19,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                 columns: table => new
                 {
                     ID = table.Column<Guid>(type: "uuid", nullable: false),
-                    ST_TYPE = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    ST_TYPE = table.Column<int>(type: "integer", nullable: false),
                     VL_AMOUNT = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     DS_TRANSACTION = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     DT_CREATED_AT = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),

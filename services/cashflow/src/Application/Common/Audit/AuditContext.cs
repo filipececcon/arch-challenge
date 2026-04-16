@@ -1,8 +1,5 @@
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Utils;
-using ArchChallenge.CashFlow.Domain.Shared.Audit;
-using ArchChallenge.CashFlow.Domain.Shared.Entities;
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using ArchChallenge.CashFlow.Domain.Shared.Projection;
 
 namespace ArchChallenge.CashFlow.Application.Common.Audit;

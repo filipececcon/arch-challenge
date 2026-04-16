@@ -1,5 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
-
 namespace ArchChallenge.CashFlow.Domain.Shared.Audit;
 
 /// <summary>

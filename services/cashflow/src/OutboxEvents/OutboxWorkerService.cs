@@ -1,5 +1,9 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ArchChallenge.CashFlow.Domain.Shared.Events;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
+using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Agents.Outbox.Events;
@@ -25,8 +29,15 @@ public sealed class OutboxWorkerService(
     IServiceScopeFactory          scopeFactory,
     IDocumentProjectionWriter     projectionWriter,
     IOptions<OutboxWorkerOptions> options,
+    IHostEnvironment              hostEnvironment,
     ILogger<OutboxWorkerService>  logger) : BackgroundService
 {
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     private readonly OutboxWorkerOptions _options = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,11 +66,20 @@ public sealed class OutboxWorkerService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var outboxRepo        = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-        var pending           = await outboxRepo.GetPendingAsync(_options.BatchSize, cancellationToken);
+        var pending = await outboxRepo.GetPendingAsync(_options.BatchSize, cancellationToken);
+
+        if (hostEnvironment.IsEnvironment("Local"))
+        {
+            using (OutboxPollCycleLogging.BeginPollCycleScope())
+            {
+                logger.LogInformation(
+                    "[OutboxWorker] poll cycle — pending {Count}: {Snapshot}",
+                    pending.Count,
+                    SerializeOutboxPendingSnapshot(pending));
+            }
+        }
 
         if (pending.Count == 0) return;
-
-        logger.LogDebug("[OutboxWorker] {Count} pending event(s) found.", pending.Count);
 
         foreach (var outboxEvent in pending)
             await ProcessSingleEventAsync(outboxEvent, cancellationToken);
@@ -84,9 +104,9 @@ public sealed class OutboxWorkerService(
 
             outboxEvent.MarkProcessed();
 
-            logger.LogDebug(
-                "[OutboxEvent] {OutboxEventId} ({EventType}) successfully synced to MongoDB.",
-                outboxEvent.Id, outboxEvent.EventType);
+            logger.LogInformation(
+                "[OutboxEvent] persisted to MongoDB — OutboxEventId={OutboxEventId}, EventType={EventType}, Collection={Collection}",
+                outboxEvent.Id, outboxEvent.EventType, collectionName);
         }
         catch (Exception ex)
         {
@@ -97,4 +117,25 @@ public sealed class OutboxWorkerService(
                 outboxEvent.Id, outboxEvent.RetryCount, _options.MaxRetries);
         }
     }
+
+    private static string SerializeOutboxPendingSnapshot(IReadOnlyList<OutboxEvent> rows)
+    {
+        var snapshot = rows.Select(static r => new OutboxSnapshotRow(
+            r.Id,
+            r.EventType,
+            r.CreatedAt,
+            r.RetryCount,
+            r.Processed,
+            r.Payload));
+
+        return JsonSerializer.Serialize(snapshot, SnapshotJsonOptions);
+    }
+
+    private sealed record OutboxSnapshotRow(
+        Guid Id,
+        string EventType,
+        DateTime CreatedAt,
+        int RetryCount,
+        bool Processed,
+        string Payload);
 }

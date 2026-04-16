@@ -1,5 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Shared.Events;
-
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Configurations;
 
 /// <summary>

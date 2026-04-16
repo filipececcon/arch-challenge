@@ -49,10 +49,9 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("DS_TRANSACTION");
 
-                    b.Property<string>("Type")
+                    b.Property<int>("Type")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasColumnType("integer")
                         .HasColumnName("ST_TYPE");
 
                     b.Property<DateTime>("UpdatedAt")

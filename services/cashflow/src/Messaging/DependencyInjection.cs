@@ -1,6 +1,5 @@
 using System.Reflection;
 using ArchChallenge.CashFlow.Application.Common.Interfaces;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Common.Attributes;
 using Microsoft.Extensions.Configuration;
 

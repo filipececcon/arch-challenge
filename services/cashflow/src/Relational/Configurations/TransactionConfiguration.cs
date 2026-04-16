@@ -1,5 +1,4 @@
 using ArchChallenge.CashFlow.Domain.Entities;
-using ArchChallenge.CashFlow.Domain.Enums;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Configurations;
 
@@ -14,10 +13,7 @@ public class TransactionConfiguration : EntityConfiguration<Transaction>
         builder
             .Property(t => t.Type)
             .HasColumnName("ST_TYPE")
-            .HasConversion(
-                v => v.ToString().ToUpperInvariant(),
-                v => (TransactionType)Enum.Parse(typeof(TransactionType), v, true))
-            .HasMaxLength(10)
+            .HasConversion<int>()
             .IsRequired();
 
         builder

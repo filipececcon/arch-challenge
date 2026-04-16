@@ -1,6 +1,5 @@
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Common.Attributes;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Common.Consumer;
 

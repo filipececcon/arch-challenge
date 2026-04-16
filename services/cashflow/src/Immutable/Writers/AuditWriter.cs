@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ImmuDB;
+using ImmuDB.Exceptions;
 using ImmuDB.SQL;
 
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Immutable.Writers;
@@ -27,6 +28,21 @@ public sealed class AuditWriter(IOptions<ImmuDbOptions> options, ILogger<AuditWr
 
             var tableName = AuditTableConventions.TableName(entry.AggregateType);
 
+            await EnsureTableExistsAsync(tableName).ConfigureAwait(false);
+
+            await InsertAuditRowAsync(tableName, entry).ConfigureAwait(false);
+        }
+        catch (VerificationException ex)
+        {
+            logger.LogWarning(ex,
+                "ImmuDB server UUID mismatch detected. Resetting session and retrying with CheckDeploymentInfo=false.");
+
+            await ResetSessionAsync().ConfigureAwait(false);
+
+            // Retry once with deployment check disabled
+            await EnsureSessionAsync(cancellationToken, checkDeploymentInfo: false).ConfigureAwait(false);
+
+            var tableName = AuditTableConventions.TableName(entry.AggregateType);
             await EnsureTableExistsAsync(tableName).ConfigureAwait(false);
 
             await InsertAuditRowAsync(tableName, entry).ConfigureAwait(false);
@@ -76,7 +92,7 @@ public sealed class AuditWriter(IOptions<ImmuDbOptions> options, ILogger<AuditWr
             new SQLParameter(entry.Payload,     "ds_payload"));
     }
 
-    private async Task EnsureSessionAsync(CancellationToken cancellationToken)
+    private async Task EnsureSessionAsync(CancellationToken cancellationToken, bool? checkDeploymentInfo = null)
     {
         if (_opened && _client is not null) return;
 
@@ -89,7 +105,7 @@ public sealed class AuditWriter(IOptions<ImmuDbOptions> options, ILogger<AuditWr
             _client = ImmuClient.NewBuilder()
                 .WithServerUrl(_opt.Host)
                 .WithServerPort(_opt.Port)
-                .CheckDeploymentInfo(_opt.CheckDeploymentInfo)
+                .CheckDeploymentInfo(checkDeploymentInfo ?? _opt.CheckDeploymentInfo)
                 .Build();
 
             await _client.Open(_opt.Username, _opt.Password, _opt.Database).ConfigureAwait(false);
@@ -103,6 +119,18 @@ public sealed class AuditWriter(IOptions<ImmuDbOptions> options, ILogger<AuditWr
         {
             _init.Release();
         }
+    }
+
+    private async Task ResetSessionAsync()
+    {
+        if (_client is not null)
+        {
+            try { await _client.Close().ConfigureAwait(false); } catch { /* ignore */ }
+        }
+
+        _client = null;
+        _opened = false;
+        _tableEnsured.Clear();
     }
 
     public async ValueTask DisposeAsync()

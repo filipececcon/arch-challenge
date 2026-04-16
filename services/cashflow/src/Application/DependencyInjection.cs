@@ -3,7 +3,6 @@ using ArchChallenge.CashFlow.Application.Common.Behaviors;
 using ArchChallenge.CashFlow.Application.Common.Enqueue;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
-using ArchChallenge.CashFlow.Domain.Shared.Audit;
 
 namespace ArchChallenge.CashFlow.Application;
 

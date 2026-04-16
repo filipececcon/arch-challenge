@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace ArchChallenge.CashFlow.Application.Common.Behaviors;
