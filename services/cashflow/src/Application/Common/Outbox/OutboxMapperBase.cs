@@ -1,7 +1,7 @@
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Utils;
 
-namespace ArchChallenge.CashFlow.Application.Common.OutboxMappers;
+namespace ArchChallenge.CashFlow.Application.Common.Outbox;
 
 /// <summary>
 /// Serialização padrão do Mongo: JSON do tipo concreto de <typeparamref name="TProjection"/>.
@@ -9,7 +9,7 @@ namespace ArchChallenge.CashFlow.Application.Common.OutboxMappers;
 /// </summary>
 public abstract class OutboxMapperBase<TCommand, TAggregate, TProjection>
     : IOutboxMapper<TCommand, TAggregate, TProjection>
-    where TCommand    : CommandBase, IRequest, IAsyncCommand
+    where TCommand    : IAuditable
     where TAggregate  : Entity, IAggregateRoot
     where TProjection : Entity
 {

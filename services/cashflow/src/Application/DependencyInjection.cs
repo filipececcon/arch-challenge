@@ -1,5 +1,7 @@
+using ArchChallenge.CashFlow.Application.Accounts.Commands.ActivateAccount;
 using ArchChallenge.CashFlow.Application.Common.Behaviors;
 using ArchChallenge.CashFlow.Application.Common.Enqueue;
+using ArchChallenge.CashFlow.Application.Common.Outbox;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 using ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
 
@@ -12,6 +14,10 @@ public static class DependencyInjection
         services.AddScoped<
             IOutboxMapper<ExecuteTransactionCommand, Account, Transaction>,
             ExecuteTransactionOutboxMapper>();
+
+        services.AddScoped<
+            IOutboxMapper<ActivateAccountCommand, Account, Account>,
+            ActivateAccountOutboxMapper>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ExecuteTransactionHandler).Assembly));

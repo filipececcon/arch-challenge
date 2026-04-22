@@ -60,5 +60,8 @@
   <data name="Validation_GetAll_CreatedAtRange" xml:space="preserve">
     <value>createdFrom deve ser menor ou igual a createdTo.</value>
   </data>
+  <data name="Validation_Entity_NotFound" xml:space="preserve">
+    <value>O registro não foi encontrado</value>
+  </data>
 </root>
 

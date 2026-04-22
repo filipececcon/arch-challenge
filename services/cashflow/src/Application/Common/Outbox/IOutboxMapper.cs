@@ -1,11 +1,11 @@
-namespace ArchChallenge.CashFlow.Application.Common.OutboxMappers;
+namespace ArchChallenge.CashFlow.Application.Common.Outbox;
 
 /// <summary>
 /// Mapeia agregado e projeção para os três alvos de outbox (Mongo, audit, eventos de integração).
 /// Retornar <c>null</c> em um alvo suprime a entrada correspondente.
 /// </summary>
 public interface IOutboxMapper<in TCommand, in TAggregate, in TProjection>
-    where TCommand    : CommandBase, IRequest, IAsyncCommand
+    where TCommand    : IAuditable
     where TAggregate  : Entity, IAggregateRoot
     where TProjection : Entity
 {

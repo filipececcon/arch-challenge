@@ -12,6 +12,8 @@ public static class MessageKeys
 
     public static class Validation
     {
+        public const string EntityNotFound  = "Validation_Entity_NotFound";
+        
         public const string TransactionTypeInvalid  = "Validation_TransactionType_Invalid";
         public const string AmountGreaterThanZero   = "Validation_Amount_GreaterThanZero";
         public const string DescriptionMaxLength    = "Validation_Description_MaxLength";

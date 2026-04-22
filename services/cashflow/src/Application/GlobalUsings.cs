@@ -7,7 +7,6 @@ global using ArchChallenge.CashFlow.Domain.Shared.Audit;
 global using ArchChallenge.CashFlow.Application.Common.Interfaces;
 global using ArchChallenge.CashFlow.Application.Common.Tasks;
 global using ArchChallenge.CashFlow.Application.Common.Commands;
-global using ArchChallenge.CashFlow.Application.Common.OutboxMappers;
 global using ArchChallenge.CashFlow.Domain.Shared.Entities;
 global using ArchChallenge.CashFlow.Domain.Entities;
 global using ArchChallenge.CashFlow.Domain.Shared.Interfaces;

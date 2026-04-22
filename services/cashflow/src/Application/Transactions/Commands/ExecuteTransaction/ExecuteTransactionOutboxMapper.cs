@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Common.Audit;
+using ArchChallenge.CashFlow.Application.Common.Outbox;
 using ArchChallenge.CashFlow.Application.Utils;
 using ArchChallenge.Contracts.Events;
 
