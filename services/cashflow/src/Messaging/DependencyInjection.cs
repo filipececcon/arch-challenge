@@ -7,7 +7,40 @@ namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddMessaging(this IServiceCollection services, IConfiguration configuration)
+    /// <summary>
+    /// Configura apenas o publisher MassTransit (IEventBus) sem registrar consumers nem canais.
+    /// Use em workers de outbox que só precisam publicar eventos, sem consumir.
+    /// </summary>
+    public static IServiceCollection AddMessagingPublisher(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddScoped<IEventBus, MassTransitEventBus>();
+
+        services.AddMassTransit(x =>
+        {
+            x.UsingRabbitMq((_, cfg) =>
+            {
+                cfg.Host(configuration["RabbitMQ:Host"], "/", h =>
+                {
+                    h.Username(configuration["RabbitMQ:Username"]!);
+                    h.Password(configuration["RabbitMQ:Password"]!);
+                });
+
+                cfg.Publish<INotification>(p => p.Exclude = true);
+            });
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Configura o bus completo: publisher + consumers + canais.
+    /// Use na API / host que processa mensagens (ex.: ExecuteTransactionConsumer).
+    /// </summary>
+    public static IServiceCollection AddMessaging(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         services.AddScoped<IEventBus, MassTransitEventBus>();
 
@@ -25,7 +58,6 @@ public static class DependencyInjection
                     h.Password(configuration["RabbitMQ:Password"]!);
                 });
 
-                // Evita que MassTransit crie exchanges para tipos MediatR (INotification).
                 cfg.Publish<INotification>(p => p.Exclude = true);
 
                 foreach (var channel in DiscoverChannels(assembly))

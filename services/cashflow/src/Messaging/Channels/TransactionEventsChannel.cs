@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Application.Transactions.Events.TransactionProcessed;
+using ArchChallenge.Contracts.Events;
 using RabbitMQ.Client;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
@@ -15,7 +15,7 @@ public sealed class TransactionEventsChannel : IChannel
 
     public void Configure(IRabbitMqBusFactoryConfigurator cfg)
     {
-        cfg.Message<TransactionProcessedMessage>(m => m.SetEntityName(Name));
-        cfg.Publish<TransactionProcessedMessage>(p => p.ExchangeType = ExchangeType.Topic);
+        cfg.Message<TransactionRegisteredIntegrationEvent>(m => m.SetEntityName(Name));
+        cfg.Publish<TransactionRegisteredIntegrationEvent>(p => p.ExchangeType = ExchangeType.Topic);
     }
 }

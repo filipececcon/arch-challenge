@@ -1,5 +1,3 @@
-using ArchChallenge.CashFlow.Domain.Entities;
-
 namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Configurations;
 
 public class TransactionConfiguration : EntityConfiguration<Transaction>
@@ -9,6 +7,18 @@ public class TransactionConfiguration : EntityConfiguration<Transaction>
         builder.ToTable("TB_TRANSACTION");
 
         base.Configure(builder);
+
+        builder
+            .Property(t => t.AccountId)
+            .HasColumnName("ID_ACCOUNT")
+            .IsRequired();
+
+        builder
+            .Property(t => t.BalanceAfter)
+            .HasColumnName("VL_BALANCE_AFTER")
+            .HasColumnType("numeric(18,2)")
+            .IsRequired();
+
 
         builder
             .Property(t => t.Type)

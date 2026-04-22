@@ -22,7 +22,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Entities.Transaction", b =>
+            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Entities.Account", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -34,9 +34,56 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("ST_ACTIVE");
 
+                    b.Property<decimal>("Balance")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("VL_BALANCE");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DT_CREATED_AT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DT_UPDATED_AT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)")
+                        .HasColumnName("ID_USER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_TB_ACCOUNT_USER");
+
+                    b.ToTable("TB_ACCOUNT", (string)null);
+                });
+
+            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Entities.Transaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("ID")
+                        .HasColumnOrder(0);
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ID_ACCOUNT");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ST_ACTIVE");
+
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("VL_AMOUNT");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("VL_BALANCE_AFTER");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -57,10 +104,12 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
                     b.ToTable("TB_TRANSACTION", (string)null);
                 });
 
-            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Shared.Events.AuditEvent", b =>
+            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Shared.Entities.Outbox", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -76,11 +125,11 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DT_CREATED_AT");
 
-                    b.Property<string>("EventType")
+                    b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
-                        .HasColumnName("DS_EVENT_TYPE");
+                        .HasColumnName("DS_KIND");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -101,69 +150,36 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("NR_RETRY_COUNT");
 
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("DS_TARGET");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DT_UPDATED_AT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Processed", "CreatedAt")
-                        .HasDatabaseName("IX_AUDIT_OUTBOX_EVENT_PROCESSED_CREATED");
+                    b.HasIndex("Processed", "Target", "CreatedAt")
+                        .HasDatabaseName("IX_OUTBOX_PROCESSED_TARGET_CREATED");
 
-                    b.ToTable("TB_OUTBOX_AUDIT_EVENT", "outbox");
+                    b.ToTable("TB_OUTBOX", "outbox");
                 });
 
-            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Shared.Events.OutboxEvent", b =>
+            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Entities.Transaction", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("ID")
-                        .HasColumnOrder(0);
+                    b.HasOne("ArchChallenge.CashFlow.Domain.Entities.Account", null)
+                        .WithMany("Transactions")
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
 
-                    b.Property<bool>("Active")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ST_ACTIVE");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DT_CREATED_AT");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("DS_EVENT_TYPE");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("DS_PAYLOAD");
-
-                    b.Property<bool>("Processed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ST_PROCESSED");
-
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DT_PROCESSED_AT");
-
-                    b.Property<int>("RetryCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("NR_RETRY_COUNT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("DT_UPDATED_AT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Processed", "CreatedAt")
-                        .HasDatabaseName("IX_OUTBOX_EVENT_PROCESSED_CREATED");
-
-                    b.ToTable("TB_OUTBOX_EVENT", "outbox");
+            modelBuilder.Entity("ArchChallenge.CashFlow.Domain.Entities.Account", b =>
+                {
+                    b.Navigation("Transactions");
                 });
 #pragma warning restore 612, 618
         }

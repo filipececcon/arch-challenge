@@ -7,5 +7,5 @@ public class ListDailyBalancesHandler(IDailyBalanceReadStore readStore)
     : IRequestHandler<ListDailyBalancesQuery, IReadOnlyList<DailyBalanceDto>>
 {
     public Task<IReadOnlyList<DailyBalanceDto>> Handle(ListDailyBalancesQuery request, CancellationToken cancellationToken) =>
-        readStore.ListAsync(request.From, request.To, cancellationToken);
+        readStore.ListAsync(request.From, request.To, request.UserId, cancellationToken);
 }

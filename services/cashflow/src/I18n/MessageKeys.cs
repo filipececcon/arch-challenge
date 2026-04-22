@@ -12,10 +12,12 @@ public static class MessageKeys
 
     public static class Validation
     {
-        public const string TransactionTypeInvalid              = "Validation_TransactionType_Invalid";
-        public const string AmountGreaterThanZero               = "Validation_Amount_GreaterThanZero";
-        public const string DescriptionMaxLength                = "Validation_Description_MaxLength";
-        public const string TransactionNotFound = "Validation_Transaction_NotFound";
+        public const string TransactionTypeInvalid  = "Validation_TransactionType_Invalid";
+        public const string AmountGreaterThanZero   = "Validation_Amount_GreaterThanZero";
+        public const string DescriptionMaxLength    = "Validation_Description_MaxLength";
+        public const string TransactionNotFound     = "Validation_Transaction_NotFound";
+        public const string AccountAlreadyExists    = "Validation_Account_AlreadyExists";
+        public const string AccountNotFound         = "Validation_Account_NotFound";
 
         /// <summary>Filtro de lista: <c>minAmount</c> não pode ser maior que <c>maxAmount</c>.</summary>
         public const string GetAllAmountRange = "Validation_GetAll_AmountRange";

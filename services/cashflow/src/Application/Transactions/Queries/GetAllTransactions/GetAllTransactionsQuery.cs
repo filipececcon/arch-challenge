@@ -10,7 +10,9 @@ namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransact
 /// <param name="MaxAmount">Valor máximo (inclusive). Deve ser ≥ <paramref name="MinAmount"/> quando ambos informados.</param>
 /// <param name="CreatedFrom">Data/hora mínima de criação (UTC recomendado). Deve ser ≤ <paramref name="CreatedTo"/> quando ambos informados.</param>
 /// <param name="CreatedTo">Data/hora máxima de criação (UTC recomendado).</param>
+/// <param name="UserId">Titular (JWT <c>sub</c>) — escopo da lista à conta implícita do usuário.</param>
 public record GetAllTransactionsQuery(
+    string     UserId,
     string?    Type         = null,
     bool?      Active       = null,
     decimal?   MinAmount    = null,

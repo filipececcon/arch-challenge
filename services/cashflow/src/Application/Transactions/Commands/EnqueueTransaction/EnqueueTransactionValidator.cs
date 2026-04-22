@@ -1,6 +1,6 @@
 namespace ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
 
-public class EnqueueTransactionValidator : AbstractValidator<EnqueueTransaction>
+public class EnqueueTransactionValidator : AbstractValidator<EnqueueTransactionCommand>
 {
     public EnqueueTransactionValidator(IStringLocalizer<Messages> localizer)
     {

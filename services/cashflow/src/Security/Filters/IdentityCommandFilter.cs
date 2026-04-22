@@ -13,9 +13,7 @@ public sealed class IdentityCommandFilter : IAsyncActionFilter
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var principal = context.HttpContext.User;
-        var userId = principal.FindFirstValue("sub")
-                     ?? principal.FindFirstValue(ClaimTypes.NameIdentifier)
-                     ?? string.Empty;
+        var userId    = UserIdentity.ResolveUserId(principal);
 
         var occurredAt = DateTime.UtcNow;
 

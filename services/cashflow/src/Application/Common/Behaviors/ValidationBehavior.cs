@@ -1,5 +1,3 @@
-using Flunt.Notifications;
-
 namespace ArchChallenge.CashFlow.Application.Common.Behaviors;
 
 public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)

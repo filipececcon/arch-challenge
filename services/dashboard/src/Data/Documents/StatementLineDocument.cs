@@ -9,6 +9,10 @@ public sealed class StatementLineDocument
     [BsonId]
     public Guid Id { get; set; }
 
+    public Guid AccountId { get; set; }
+
+    public string UserId { get; set; } = "";
+
     /// <summary>Chave de dia UTC no formato yyyy-MM-dd — usada como índice de range.</summary>
     public string Day { get; set; } = "";
 

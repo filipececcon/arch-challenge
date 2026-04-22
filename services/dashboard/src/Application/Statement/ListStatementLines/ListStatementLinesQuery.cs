@@ -1,11 +1,13 @@
 namespace ArchChallenge.Dashboard.Application.Statement.ListStatementLines;
 
+/// <param name="UserId">Titular (JWT <c>sub</c>) — escopo do extrato.</param>
 /// <param name="From">Início do intervalo (inclusive). Nulo = sem limite inferior.</param>
 /// <param name="To">Fim do intervalo (inclusive). Nulo = sem limite superior.</param>
 /// <param name="Type">Filtro opcional por tipo: CREDIT ou DEBIT.</param>
 /// <param name="Page">Página (base 1).</param>
 /// <param name="PageSize">Itens por página (máx. 200).</param>
 public record ListStatementLinesQuery(
+    string UserId,
     DateOnly? From,
     DateOnly? To,
     string? Type,

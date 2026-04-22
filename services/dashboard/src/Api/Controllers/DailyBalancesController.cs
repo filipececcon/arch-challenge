@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ArchChallenge.Dashboard.Application.DailyBalances;
 using ArchChallenge.Dashboard.Application.DailyBalances.GetDailyBalanceByDate;
 using ArchChallenge.Dashboard.Application.DailyBalances.ListDailyBalances;
@@ -16,11 +17,15 @@ public class DailyBalancesController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByDate(DateOnly date, CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetDailyBalanceByDateQuery(date), cancellationToken);
+        var userId = User.FindFirstValue("sub")
+                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? string.Empty;
+
+        var result = await mediator.Send(new GetDailyBalanceByDateQuery(date, userId), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
-    /// <summary>Lista consolidados por intervalo de datas (UTC).</summary>
+    /// <summary>Lista consolidados por intervalo de datas (UTC) para o usuário autenticado.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<DailyBalanceDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
@@ -28,7 +33,11 @@ public class DailyBalancesController(IMediator mediator) : ControllerBase
         [FromQuery] DateOnly? to,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new ListDailyBalancesQuery(from, to), cancellationToken);
+        var userId = User.FindFirstValue("sub")
+                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? string.Empty;
+
+        var result = await mediator.Send(new ListDailyBalancesQuery(from, to, userId), cancellationToken);
         return Ok(result);
     }
 }

@@ -8,8 +8,10 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Documents.Models;
 public sealed class TransactionDocument
 {
     public Guid     Id          { get; set; }
+    public Guid     AccountId   { get; set; }
     public string   Type        { get; set; } = null!;
     public decimal  Amount      { get; set; }
+    public decimal  BalanceAfter { get; set; }
     public string?  Description { get; set; }
     public DateTime CreatedAt   { get; set; }
     public DateTime UpdatedAt   { get; set; }

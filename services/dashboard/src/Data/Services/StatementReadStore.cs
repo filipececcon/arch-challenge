@@ -13,6 +13,7 @@ public class StatementReadStore(IMongoDatabase database) : IStatementReadStore
         database.GetCollection<StatementLineDocument>(MongoDashboardCollections.StatementLines);
 
     public async Task<StatementPageDto> ListAsync(
+        string userId,
         DateOnly? from,
         DateOnly? to,
         string? type,
@@ -25,6 +26,7 @@ public class StatementReadStore(IMongoDatabase database) : IStatementReadStore
         var typeNorm = type?.ToUpperInvariant();
 
         var filter = new QueryCriteriaBuilder<StatementLineDocument>()
+            .Where(l => l.UserId == userId)
             .AndIf(fromUtc   is not null, l => l.OccurredAt >= fromUtc!.Value)
             .AndIf(toUtc     is not null, l => l.OccurredAt <= toUtc!.Value)
             .AndIf(typeNorm  is not null, l => l.Type       == typeNorm!)
@@ -47,6 +49,6 @@ public class StatementReadStore(IMongoDatabase database) : IStatementReadStore
     private static StatementLineDto ToDto(StatementLineDocument doc)
     {
         var date = DateOnly.ParseExact(doc.Day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return new StatementLineDto(doc.Id, date, doc.OccurredAt, doc.Type, doc.Amount);
+        return new StatementLineDto(doc.Id, doc.AccountId, date, doc.OccurredAt, doc.Type, doc.Amount);
     }
 }

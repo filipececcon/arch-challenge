@@ -6,6 +6,9 @@ public sealed class GetAllTransactionsQueryValidator : AbstractValidator<GetAllT
 {
     public GetAllTransactionsQueryValidator(IStringLocalizer<Messages> localizer)
     {
+        RuleFor(q => q.UserId)
+            .NotEmpty();
+
         When(q => !string.IsNullOrWhiteSpace(q.Type), () =>
         {
             RuleFor(q => q.Type!)

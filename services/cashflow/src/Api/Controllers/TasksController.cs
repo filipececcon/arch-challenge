@@ -51,7 +51,9 @@ public class TasksController(ITaskCacheService taskCache) : ControllerBase
     private async Task WriteSseAsync(object payload, CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(payload, SerializeUtils.EntityJsonOptions);
+        
         await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+        
         await Response.Body.FlushAsync(cancellationToken);
     }
 }

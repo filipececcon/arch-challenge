@@ -9,12 +9,21 @@ namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransact
 /// <summary>
 /// Lista transações no Mongo com critérios opcionais montados a partir da query string.
 /// </summary>
-public sealed class GetAllTransactionsHandler(IDocumentsReadRepository<TransactionDocument> documentsRepository)
+public sealed class GetAllTransactionsHandler(
+    IDocumentsReadRepository<TransactionDocument> documentsRepository,
+    IReadRepository<Account>                        accountRepository)
     : IRequestHandler<GetAllTransactionsQuery, GetAllTransactionsResult>
 {
     public async Task<GetAllTransactionsResult> Handle(GetAllTransactionsQuery request, CancellationToken cancellationToken)
     {
-        var criteria = BuildCriteria(request);
+        var account = await accountRepository.FirstOrDefaultAsync(
+            new AccountByUserIdSpec(request.UserId),
+            cancellationToken);
+
+        if (account is null)
+            return new GetAllTransactionsResult([]);
+
+        var criteria = BuildCriteria(request, account.Id);
 
         var documents = await documentsRepository.ListAsync(
             predicate: criteria,
@@ -27,14 +36,18 @@ public sealed class GetAllTransactionsHandler(IDocumentsReadRepository<Transacti
         return new GetAllTransactionsResult(transactions);
     }
 
-    private static Expression<Func<TransactionDocument, bool>>? BuildCriteria(GetAllTransactionsQuery request)
+    private static Expression<Func<TransactionDocument, bool>>? BuildCriteria(
+        GetAllTransactionsQuery request,
+        Guid accountId)
     {
         var q = new QueryCriteriaBuilder<TransactionDocument>();
+
+        q.Where(d => d.AccountId == accountId);
 
         if (!string.IsNullOrWhiteSpace(request.Type))
         {
             var txType = Enum.Parse<TransactionType>(request.Type, ignoreCase: true);
-            
+
             q.Where(d => d.Type == txType.ToString());
         }
 

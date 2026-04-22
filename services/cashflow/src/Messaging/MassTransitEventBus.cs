@@ -6,4 +6,7 @@ public sealed class MassTransitEventBus(IPublishEndpoint publishEndpoint) : IEve
 {
     public Task PublishAsync<T>(T message, CancellationToken cancellationToken = default) where T : class
         => publishEndpoint.Publish(message, cancellationToken);
+
+    public Task PublishAsync(object message, Type messageType, CancellationToken cancellationToken = default)
+        => publishEndpoint.Publish(message, messageType, cancellationToken);
 }

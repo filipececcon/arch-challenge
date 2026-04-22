@@ -1,44 +1,56 @@
-using System.Reflection;
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Utils;
 
 namespace ArchChallenge.CashFlow.Application.Common.Commands;
 
 /// <summary>
-/// Template Method para handlers que executam um comando de escrita.
-/// Encapsula o fluxo de infraestrutura (transação, auditoria, task cache, ação pós-commit),
-/// deixando <see cref="ExecuteAsync"/> como ponto de extensão para a regra de negócio.
+/// Template Method para handlers que executam um comando de escrita assíncrona.
+/// 
+/// Parâmetros genéricos:
+/// <list type="bullet">
+///   <item><typeparamref name="TCommand"/>    — command; herda <see cref="CommandBase"/>, implementa <c>IRequest</c> e <see cref="IAsyncCommand"/>.</item>
+///   <item><typeparamref name="TAggregate"/>  — raiz de agregação que contém a lógica de domínio e o <c>IsFailure</c>.</item>
+///   <item><typeparamref name="TProjection"/> — entidade projetada no MongoDB e devolvida ao cliente no task-cache.
+///         Em geral igual a <typeparamref name="TAggregate"/>; difere quando o handler opera em dois agregados
+///         (ex.: <c>ExecuteTransactionHandler</c>: <c>TAggregate=Account</c>, <c>TProjection=Transaction</c>).</item>
+/// </list>
+/// 
+/// Três entradas de outbox são gravadas na mesma transação (atomicamente) via
+/// <see>
+///     <cref>IOutboxMapperOutboxMapper{TCommand,TAggregate,TProjection}</cref>
+/// </see>
+/// :
+/// <list type="bullet">
+///   <item><see cref="OutboxTarget.Mongo"/>  — JSON de <typeparamref name="TProjection"/> no read model (MongoDB).</item>
+///   <item><see cref="OutboxTarget.Audit"/>  — auditoria imutável (immudb), quando o mapeador retorna não-nulo.</item>
+///   <item><see cref="OutboxTarget.Events"/> — evento de integração para o broker, quando o mapeador retorna não-nulo.</item>
+/// </list>
 /// </summary>
-/// <typeparam name="TCommand">
-/// Command de execução — deve herdar <see cref="CommandBase"/> e implementar <see cref="IAsyncCommand"/>.
-/// </typeparam>
-/// <typeparam name="TAggregate">Raiz de agregação produzida pelo handler filho.</typeparam>
-/// <typeparam name="TMessage">Mensagem a ser enviada para o broker</typeparam>
-public abstract class CommandHandlerBase<TCommand, TAggregate, TMessage>(
-    IUnitOfWork                unitOfWork,
-    IOutboxRepository          outboxRepository,
-    IAuditContext              auditContext,
-    ITaskCacheService          taskCache,
-    IEventBus                  eventBus,
-    IStringLocalizer<Messages> localizer)
+public abstract class CommandHandlerBase<TCommand, TAggregate, TProjection>(
+    IUnitOfWork unitOfWork,
+    IOutboxRepository outboxRepository,
+    ITaskCacheService taskCache,
+    IStringLocalizer<Messages> localizer,
+    IOutboxMapper<TCommand, TAggregate, TProjection> mapper)
     : IRequestHandler<TCommand>
-    where TCommand   : CommandBase, IRequest, IAsyncCommand
-    where TAggregate : Entity, IAggregateRoot
-    where TMessage : MessageBase
+    where TCommand    : CommandBase, IRequest, IAsyncCommand
+    where TAggregate  : Entity, IAggregateRoot
+    where TProjection : Entity
 {
-    // Lido uma única vez por instanciação do tipo genérico (custo zero em runtime).
-    // Convenção: toda TMessage deve declarar `public new const string EventName`.
-    private static readonly string EventName =
-        typeof(TMessage)
-            .GetField("EventName", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-            ?.GetRawConstantValue() as string
-        ?? typeof(TMessage).Name;
-    
-    /// <summary>
-    /// Implementa a regra de negócio: cria a raiz de agregação, persiste no repositório
-    /// </summary>
+    /// <summary>Regra de negócio: cria/atualiza o agregado e persiste no repositório.</summary>
     protected abstract Task<TAggregate> ExecuteAsync(TCommand command, CancellationToken cancellationToken);
-    
+
+    /// <summary>
+    /// Extrai a entidade projetada (Mongo + cache) a partir do agregado retornado por <see cref="ExecuteAsync"/>.
+    /// Padrão: cast direto — funciona quando <typeparamref name="TAggregate"/> == <typeparamref name="TProjection"/>.
+    /// Sobrescreva quando os dois tipos diferirem.
+    /// </summary>
+    protected virtual TProjection GetProjection(TAggregate entity)
+        => entity as TProjection
+        ?? throw new InvalidOperationException(
+            $"Override {nameof(GetProjection)} when TAggregate ({typeof(TAggregate).Name}) " +
+            $"differs from TProjection ({typeof(TProjection).Name}).");
+
     public async Task Handle(TCommand command, CancellationToken cancellationToken)
     {
         await using var tx = await unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -47,56 +59,56 @@ public abstract class CommandHandlerBase<TCommand, TAggregate, TMessage>(
         {
             var entity = await ExecuteAsync(command, cancellationToken);
 
-            await WriteOutboxEvent(entity, cancellationToken);
-            
-            var result = GetCommandResult(entity);
-
             if (entity.IsFailure)
             {
                 await taskCache.SetFailureAsync(command.TaskId, localizer[MessageKeys.Exception.DomainError], cancellationToken);
+                
                 await tx.RollbackAsync(cancellationToken);
+                
                 return;
             }
 
-            auditContext.Capture(entity, EventName);
+            var projection = GetProjection(entity);
+
+            await WriteOutbox(entity, projection, command, cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            
+
             await tx.CommitAsync(cancellationToken);
 
-            await taskCache.SetSuccessAsync(command.TaskId, result.Payload, cancellationToken);
+            var payload = JsonSerializer.SerializeToElement(projection, SerializeUtils.EntityJsonOptions);
 
-            if (result.AfterCommit is not null) await result.AfterCommit(cancellationToken);
+            await taskCache.SetSuccessAsync(command.TaskId, payload, cancellationToken);
         }
         catch
         {
             await tx.RollbackAsync(cancellationToken);
+
             await taskCache.SetFailureAsync(command.TaskId, localizer[MessageKeys.Exception.InternalError], cancellationToken);
+
             throw;
         }
     }
-    
-    private async Task WriteOutboxEvent(IAggregateRoot entity, CancellationToken cancellationToken)
+
+    private async Task WriteOutbox(
+        TAggregate entity, TProjection projection,
+        TCommand command, CancellationToken cancellationToken)
     {
-        // Usar o tipo em tempo de execução: serializar como IAggregateRoot (marker interface)
-        // produz JSON vazio — o contrato vem só do tipo declarado em Serialize<T>.
-        var json = JsonSerializer.Serialize(entity, entity.GetType(), SerializeUtils.EntityJsonOptions);
+        var name = mapper.EventName;
 
-        var outboxEvent = new OutboxEvent(EventName, json);
+        var mongo = mapper.ToMongo(projection, command);
         
-        await outboxRepository.AddAsync(outboxEvent, cancellationToken);
-    }
+        if (mongo is not null)
+            await outboxRepository.AddAsync(Outbox.ForMongo(name, mongo), cancellationToken);
 
-    private CommandResult<TAggregate> GetCommandResult(TAggregate entity)
-    {
-        var json    = JsonSerializer.SerializeToElement(entity, SerializeUtils.EntityJsonOptions);
+        var audit = mapper.ToAudit(entity, command);
         
-        var message = (TMessage)Activator.CreateInstance(typeof(TMessage), json.GetRawText())!;
+        if (audit is not null)
+            await outboxRepository.AddAsync(Outbox.ForAudit(name, audit), cancellationToken);
 
-        return new CommandResult<TAggregate>(
-            Aggregate:   entity,
-            EventName:   EventName,
-            Payload:     json,
-            AfterCommit: ct => eventBus.PublishAsync(message, ct));
+        var events = mapper.ToEvents(projection, command);
+        
+        if (events is not null)
+            await outboxRepository.AddAsync(Outbox.ForEvents(name, events), cancellationToken);
     }
 }

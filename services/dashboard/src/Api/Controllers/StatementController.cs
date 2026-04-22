@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ArchChallenge.Dashboard.Application.Statement;
 using ArchChallenge.Dashboard.Application.Statement.ListStatementLines;
 
@@ -10,7 +11,7 @@ namespace ArchChallenge.Dashboard.Api.Controllers;
 public class StatementController(IMediator mediator) : ControllerBase
 {
     /// <summary>
-    /// Extrato paginado de lançamentos processados.
+    /// Extrato paginado de lançamentos processados (conta implícita do usuário autenticado).
     /// Filtre por <c>from</c>/<c>to</c> (DateOnly yyyy-MM-dd), <c>type</c> (CREDIT | DEBIT),
     /// <c>page</c> e <c>pageSize</c> (máx. 200, padrão 50).
     /// </summary>
@@ -24,8 +25,12 @@ public class StatementController(IMediator mediator) : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
+        var userId = User.FindFirstValue("sub")
+                     ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? string.Empty;
+
         var result = await mediator.Send(
-            new ListStatementLinesQuery(from, to, type, page, pageSize),
+            new ListStatementLinesQuery(userId, from, to, type, page, pageSize),
             cancellationToken);
 
         return Ok(result);

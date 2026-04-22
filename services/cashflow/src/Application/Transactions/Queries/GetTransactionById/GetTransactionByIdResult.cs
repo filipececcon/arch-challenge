@@ -2,8 +2,10 @@ namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransaction
 
 public record GetTransactionByIdResult(
     Guid Id,
+    Guid AccountId,
     string Type,
     decimal Amount,
+    decimal BalanceAfter,
     string? Description,
     DateTime CreatedAt,
     bool Active)

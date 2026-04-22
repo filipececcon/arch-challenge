@@ -20,8 +20,10 @@ internal static class TransactionDocumentClassMap
                 BsonClassMap.RegisterClassMap<TransactionDocument>(cm =>
                 {
                     cm.MapIdProperty(d => d.Id);
+                    cm.MapProperty(d => d.AccountId).SetElementName("accountId");
                     cm.MapProperty(d => d.Type).SetElementName("type");
                     cm.MapProperty(d => d.Amount).SetElementName("amount");
+                    cm.MapProperty(d => d.BalanceAfter).SetElementName("balanceAfter");
                     cm.MapProperty(d => d.Description).SetElementName("description");
                     cm.MapProperty(d => d.CreatedAt).SetElementName("createdAt");
                     cm.MapProperty(d => d.UpdatedAt).SetElementName("updatedAt");

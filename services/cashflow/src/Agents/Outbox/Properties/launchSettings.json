@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Agents.Outbox": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Local"
+      }
+    }
+  }
+}
