@@ -27,6 +27,7 @@ public sealed class CreateAccountHandler(
         await writeRepository.AddAsync(account, cancellationToken);
 
         var auditJson = AuditPayloadBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt);
+        
         await outboxRepository.AddAsync(Outbox.ForAudit(EventName, auditJson), cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

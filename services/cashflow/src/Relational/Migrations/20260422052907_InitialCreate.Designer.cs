@@ -136,7 +136,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("jsonb")
                         .HasColumnName("DS_PAYLOAD");
 
                     b.Property<bool>("Processed")

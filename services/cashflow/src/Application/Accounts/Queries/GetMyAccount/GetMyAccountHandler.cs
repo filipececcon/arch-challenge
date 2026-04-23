@@ -5,12 +5,11 @@ public sealed class GetMyAccountHandler(IReadRepository<Account> accountReposito
 {
     public async Task<GetMyAccountResult?> Handle(GetMyAccountQuery request, CancellationToken cancellationToken)
     {
-        var account = await accountRepository.FirstOrDefaultAsync(
-            new AccountByUserIdSpec(request.UserId),
-            cancellationToken);
+        var spec = new AccountByUserIdSpec(request.UserId);
+        
+        var account = await accountRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
-        if (account is null)
-            return null;
+        if (account is null) return null;
 
         return new GetMyAccountResult(
             account.Id,

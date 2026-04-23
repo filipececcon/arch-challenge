@@ -19,7 +19,7 @@ public sealed class OutboxConfiguration : EntityConfiguration<Outbox>
 
         builder.Property(o => o.Payload)
             .HasColumnName("DS_PAYLOAD")
-            .HasColumnType("text")
+            .HasColumnType("jsonb")
             .IsRequired();
 
         builder.Property(o => o.Target)

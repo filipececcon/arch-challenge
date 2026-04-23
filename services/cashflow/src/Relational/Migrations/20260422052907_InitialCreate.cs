@@ -37,7 +37,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.Data.Relational.Migrations
                 {
                     ID = table.Column<Guid>(type: "uuid", nullable: false),
                     DS_KIND = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    DS_PAYLOAD = table.Column<string>(type: "text", nullable: false),
+                    DS_PAYLOAD = table.Column<string>(type: "jsonb", nullable: false),
                     DS_TARGET = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     ST_PROCESSED = table.Column<bool>(type: "boolean", nullable: false),
                     DT_PROCESSED_AT = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
