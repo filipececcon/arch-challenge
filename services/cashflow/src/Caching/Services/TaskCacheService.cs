@@ -1,4 +1,6 @@
-using TaskStatus = ArchChallenge.CashFlow.Application.Common.Tasks.TaskStatus;
+using ArchChallenge.CashFlow.Application.Abstractions.Tasks;
+using ArchChallenge.CashFlow.Application.Abstractions.Utils;
+using TaskStatus = ArchChallenge.CashFlow.Application.Abstractions.Tasks.TaskStatus;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Caching.Services;
 

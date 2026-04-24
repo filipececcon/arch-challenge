@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Infrastructure.Agents.Outbox.Configuration;
+using ArchChallenge.CashFlow.Infrastructure.Agents.Outbox;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Logging;
 using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 using ArchChallenge.CashFlow.Infrastructure.Data.Documents;

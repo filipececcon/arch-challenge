@@ -1,7 +1,7 @@
 using ArchChallenge.CashFlow.Api.Filters;
-using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
-using ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransactions;
-using ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
+using ArchChallenge.CashFlow.Application.Transactions.Enqueue;
+using ArchChallenge.CashFlow.Application.Transactions.GetAll;
+using ArchChallenge.CashFlow.Application.Transactions.GetById;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 

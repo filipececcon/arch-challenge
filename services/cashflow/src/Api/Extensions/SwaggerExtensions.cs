@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Application.Transactions.Queries.GetAllTransactions;
+using ArchChallenge.CashFlow.Application.Transactions.GetAll;
 using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
 using Microsoft.OpenApi.Models;
 using System.Reflection;

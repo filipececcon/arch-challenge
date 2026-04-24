@@ -1,3 +1,5 @@
+using ArchChallenge.CashFlow.Application.Abstractions.Tasks;
+
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Caching;
 
 public static class DependencyInjection

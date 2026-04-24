@@ -1,9 +1,9 @@
 using ArchChallenge.CashFlow.Api.Extensions;
-using ArchChallenge.CashFlow.Application.Accounts.Commands.ActivateAccount;
-using ArchChallenge.CashFlow.Application.Accounts.Commands.CreateAccount;
-using ArchChallenge.CashFlow.Application.Accounts.Commands.DeactivateAccount;
-using ArchChallenge.CashFlow.Application.Accounts.Queries.GetMyAccount;
-using ArchChallenge.CashFlow.Application.Common.Responses;
+using ArchChallenge.CashFlow.Application.Abstractions.Results;
+using ArchChallenge.CashFlow.Application.Accounts.Activate;
+using ArchChallenge.CashFlow.Application.Accounts.Create;
+using ArchChallenge.CashFlow.Application.Accounts.Deactivate;
+using ArchChallenge.CashFlow.Application.Accounts.GetMyAccount;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 
@@ -52,9 +52,9 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(CancellationToken cancellationToken)
     {
-        var command = new DeactivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
-        var found   = await mediator.Send(command, cancellationToken);
-        return found ? NoContent() : NotFound();
+        var command  = new DeactivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var envelope = await mediator.Send(command, cancellationToken);
+        return envelope.ToActionResult();
     }
 
     /// <summary>
@@ -65,9 +65,9 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Activate(CancellationToken cancellationToken)
     {
-        var command = new ActivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
-        var found   = await mediator.Send(command, cancellationToken);
-        return found ? NoContent() : NotFound();
+        var command  = new ActivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var envelope = await mediator.Send(command, cancellationToken);
+        return envelope.ToActionResult();
     }
 }
 

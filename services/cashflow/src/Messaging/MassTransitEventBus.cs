@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
+using ArchChallenge.CashFlow.Application.Abstractions.Messaging;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging;
 

@@ -1,4 +1,4 @@
-using ArchChallenge.CashFlow.Application.Transactions.Commands.EnqueueTransaction;
+using ArchChallenge.CashFlow.Application.Transactions.Enqueue;
 
 namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
 

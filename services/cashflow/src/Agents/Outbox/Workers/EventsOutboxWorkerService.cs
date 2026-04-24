@@ -1,5 +1,5 @@
 using System.Text.Json;
-using ArchChallenge.CashFlow.Application.Common.Interfaces;
+using ArchChallenge.CashFlow.Application.Abstractions.Messaging;
 using ArchChallenge.CashFlow.Domain.Shared.Entities;
 using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using ArchChallenge.CashFlow.Infrastructure.Agents.Outbox.Options;

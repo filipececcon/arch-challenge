@@ -34,8 +34,10 @@ public sealed class AuditOutboxWorkerService(
         IServiceScope scope, CancellationToken cancellationToken)
     {
         var repo = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-        return await repo.GetPendingAsync(OutboxTarget.Audit, _options.BatchSize, _options.MaxRetries, cancellationToken)
-                         .ConfigureAwait(false);
+        
+        return await repo
+            .GetPendingAsync(OutboxTarget.Audit, _options.BatchSize, _options.MaxRetries, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public override async Task ProcessSingleAsync(OutboxEntity outbox, CancellationToken cancellationToken)
@@ -73,6 +75,7 @@ public sealed class AuditOutboxWorkerService(
     public override async Task PersistChangesAsync(IServiceScope scope, CancellationToken cancellationToken)
     {
         var repo = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
+        
         await repo.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -84,15 +87,19 @@ public sealed class AuditOutboxWorkerService(
         IServiceScope scope, Func<Task> work, CancellationToken cancellationToken)
     {
         var ctx = scope.ServiceProvider.GetRequiredService<CashFlowDbContext>();
+        
         await using var tx = await ctx.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        
         try
         {
             await work().ConfigureAwait(false);
+            
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
         {
             await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            
             throw;
         }
     }
@@ -100,6 +107,7 @@ public sealed class AuditOutboxWorkerService(
     private static AuditEntry DeserializeEntry(string json)
     {
         using var doc = JsonDocument.Parse(json);
+        
         var root      = doc.RootElement;
 
         return new AuditEntry(

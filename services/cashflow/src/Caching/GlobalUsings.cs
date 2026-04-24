@@ -1,7 +1,5 @@
 global using System.Text.Json;
-global using ArchChallenge.CashFlow.Application.Common.Interfaces;
-global using ArchChallenge.CashFlow.Application.Common.Tasks;
-global using ArchChallenge.CashFlow.Application.Utils;
+global using ArchChallenge.CashFlow.Application.Abstractions.Messaging;
 global using ArchChallenge.CashFlow.Domain.Shared.Projection;
 global using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Caching.Services;
 global using Microsoft.Extensions.Caching.Distributed;
