@@ -1,3 +1,4 @@
+using ArchChallenge.CashFlow.Application.Common.Handlers;
 using ArchChallenge.CashFlow.Application.Common.Outbox;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Commands.ExecuteTransaction;
@@ -18,8 +19,8 @@ public sealed class ExecuteTransactionHandler(
     IStringLocalizer<Messages> localizer,
     IReadRepository<Account>   readRepository,
     IOutboxMapper<ExecuteTransactionCommand, Account, Transaction> outboxMapper)
-    : AsyncCommandHandlerBase<ExecuteTransactionCommand, Account, Transaction>(
-        unitOfWork, outboxRepository, taskCache, localizer, outboxMapper,
+    : AsyncCommandHandler<ExecuteTransactionCommand, Account, Transaction>(
+        unitOfWork, taskCache, localizer, 
         new OutboxWriter<ExecuteTransactionCommand, Account, Transaction>(outboxRepository, outboxMapper))
 {
     protected override async Task<Account?> ExecuteAsync(

@@ -3,7 +3,7 @@ namespace ArchChallenge.CashFlow.Application.Common.Outbox;
 public class OutboxWriter<TCommand, TAggregate, TProjection>(
     IOutboxRepository outboxRepository,
     IOutboxMapper<TCommand, TAggregate, TProjection> mapper)
-    where TCommand    : IRequest, IAuditable
+    where TCommand    : IAuditable
     where TAggregate  : Entity, IAggregateRoot
     where TProjection : Entity
 {

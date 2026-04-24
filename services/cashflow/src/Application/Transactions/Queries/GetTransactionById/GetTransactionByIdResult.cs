@@ -1,3 +1,5 @@
+using ArchChallenge.CashFlow.Application.Common.Responses;
+
 namespace ArchChallenge.CashFlow.Application.Transactions.Queries.GetTransactionById;
 
 public record GetTransactionByIdResult(
@@ -8,6 +10,4 @@ public record GetTransactionByIdResult(
     decimal BalanceAfter,
     string? Description,
     DateTime CreatedAt,
-    bool Active)
-{
-}
+    bool Active) : IResponse;

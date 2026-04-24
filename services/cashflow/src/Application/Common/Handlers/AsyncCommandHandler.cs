@@ -1,9 +1,9 @@
 using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Common.Outbox;
 using ArchChallenge.CashFlow.Application.Utils;
-using Flunt.Notifications;
 
-namespace ArchChallenge.CashFlow.Application.Common.Commands;
+namespace ArchChallenge.CashFlow.Application.Common.Handlers;
+
 /// <summary>
 /// Template Method para handlers que executam um comando de escrita assíncrona.
 /// 
@@ -27,12 +27,13 @@ namespace ArchChallenge.CashFlow.Application.Common.Commands;
 ///   <item><see cref="OutboxTarget.Events"/> — evento de integração para o broker, quando o mapeador retorna não-nulo.</item>
 /// </list>
 /// </summary>
-public abstract class CommandHandlerBase<TCommand, TAggregate, TProjection>(
+public abstract class AsyncCommandHandler<TCommand, TAggregate, TProjection>(
     IUnitOfWork unitOfWork,
+    ITaskCacheService taskCache,
     IStringLocalizer<Messages> localizer,
     OutboxWriter<TCommand, TAggregate, TProjection> outboxWriter)
-    : Notifiable<Notification>, IRequestHandler<TCommand>
-    where TCommand    : IRequest, IAuditable
+    : IRequestHandler<TCommand>
+    where TCommand    : CommandBase, IRequest, IAsyncCommand
     where TAggregate  : Entity, IAggregateRoot
     where TProjection : Entity
 {
@@ -58,26 +59,42 @@ public abstract class CommandHandlerBase<TCommand, TAggregate, TProjection>(
         {
             var entity = await ExecuteAsync(command, cancellationToken);
 
-            if (entity is null || entity.IsFailure || !IsValid)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                return;
-            }
+            var hasErrors = await Validate(command, entity, tx, cancellationToken); 
+            
+            if (hasErrors) return;
 
-            var projection = GetProjection(entity);
+            var projection = GetProjection(entity!);
 
-            await outboxWriter.WriteAsync(entity, projection, command, cancellationToken);
+            await outboxWriter.WriteAsync(entity!, projection, command, cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             await tx.CommitAsync(cancellationToken);
 
             var payload = JsonSerializer.SerializeToElement(projection, SerializeUtils.EntityJsonOptions);
+
+            await taskCache.SetSuccessAsync(command.TaskId, payload, cancellationToken);
         }
         catch
         {
             await tx.RollbackAsync(cancellationToken);
+
+            await taskCache.SetFailureAsync(command.TaskId, [localizer[MessageKeys.Exception.InternalError].Value], cancellationToken);
+
             throw;
         }
+    }
+
+    private async Task<bool> Validate(TCommand command, TAggregate? entity, IDbTransaction tx, CancellationToken cancellationToken)
+    {
+        var errors = CommandHandlerValidation.BuildMessages(localizer, entity);
+        
+        if (errors.Count is 0) return false;
+
+        await taskCache.SetFailureAsync(command.TaskId, [.. errors], cancellationToken);
+        
+        await tx.RollbackAsync(cancellationToken);
+        
+        return true;
     }
 }

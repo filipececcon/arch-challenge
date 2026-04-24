@@ -1,7 +1,9 @@
+using ArchChallenge.CashFlow.Api.Extensions;
 using ArchChallenge.CashFlow.Application.Accounts.Commands.ActivateAccount;
 using ArchChallenge.CashFlow.Application.Accounts.Commands.CreateAccount;
 using ArchChallenge.CashFlow.Application.Accounts.Commands.DeactivateAccount;
 using ArchChallenge.CashFlow.Application.Accounts.Queries.GetMyAccount;
+using ArchChallenge.CashFlow.Application.Common.Responses;
 
 namespace ArchChallenge.CashFlow.Api.Controllers;
 
@@ -16,14 +18,17 @@ public class AccountsController(IMediator mediator) : ControllerBase
     /// Retorna 409 Conflict se já existir uma conta para este usuário.
     /// </summary>
     [HttpPost]
-    [ProducesResponseType(typeof(CreateAccountResult), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(Result<CreateAccountResult>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Result<CreateAccountResult>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CancellationToken cancellationToken)
     {
-        var command = new CreateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
-        var result  = await mediator.Send(command, cancellationToken);
+        var command  = new CreateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var envelope = await mediator.Send(command, cancellationToken);
 
-        return CreatedAtAction(nameof(GetMe), null, result);
+        if (envelope.IsSuccess)
+            return CreatedAtAction(nameof(GetMe), null, envelope);
+
+        return envelope.ToActionResult();
     }
 
     /// <summary>
