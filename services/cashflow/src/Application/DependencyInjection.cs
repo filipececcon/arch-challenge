@@ -18,6 +18,7 @@ public static class DependencyInjection
             // UnitOfWork e Outbox aplicam-se somente a ISyncCommand.
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            cfg.AddOpenBehavior(typeof(TaskCacheBehavior<,>));
             cfg.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
             cfg.AddOpenBehavior(typeof(OutboxBehavior<,>));
         });

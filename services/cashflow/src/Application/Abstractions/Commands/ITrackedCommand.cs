@@ -14,12 +14,10 @@ public interface ITrackedCommand : ISyncCommand
 }
 
 /// <summary>Versão tipada de <see cref="ITrackedCommand"/>.</summary>
-public interface ITrackedCommand<TResponse> : ITrackedCommand, ISyncCommand<TResponse>
-    where TResponse : class;
+public interface ITrackedCommand<TResponse> : ITrackedCommand, ISyncCommand<TResponse> where TResponse : class;
 
 /// <summary>Base record para comandos com rastreamento de tarefa.</summary>
-public abstract record TrackedCommand<TResponse>(Guid TaskId) : ITrackedCommand<TResponse>
-    where TResponse : class
+public abstract record TrackedCommand<TResponse>(Guid TaskId) : ITrackedCommand<TResponse> where TResponse : class
 {
     public string UserId { get; set; } = string.Empty;
     public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
