@@ -27,7 +27,7 @@ internal sealed class OutboxWorkerOptionsValidator : IValidateOptions<OutboxWork
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(
                 $"OutboxWorker.CollectionMap is missing entries for: {string.Join(", ", missing)}. " +
-                 "Add the EventType → MongoDB collection mapping in appsettings.json.");
+                 "Register the EventType → MongoDB collection mapping in DependencyInjection.cs.");
     }
 
     private static IEnumerable<string> DiscoverEventNames() =>

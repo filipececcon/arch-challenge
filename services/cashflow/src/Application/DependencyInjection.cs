@@ -12,13 +12,10 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
 
             // Pipeline (mais externo → mais interno):
-            // Logging → Validation → TaskCache → UnitOfWork → Outbox → Handler
-            //
-            // TaskCache aplica-se somente a ITrackedCommand.
-            // UnitOfWork e Outbox aplicam-se somente a ISyncCommand.
+            // Logging → Validation → EnqueueTaskCache* → TaskCache** → UnitOfWork → Outbox → Handler
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
-            cfg.AddOpenBehavior(typeof(TaskCacheBehavior<,>));
+            cfg.AddOpenBehavior(typeof(EnqueueBehavior<,>));
             cfg.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
             cfg.AddOpenBehavior(typeof(OutboxBehavior<,>));
         });

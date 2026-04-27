@@ -31,7 +31,7 @@ public class TransactionsController(IMediator mediator) : ControllerBase
             command with { IdempotencyKey = HttpContext.GetIdempotencyKey() },
             cancellationToken);
 
-        return Accepted(new { result.TaskId });
+        return Accepted(new { result.Data!.TaskId });
     }
 
     /// <summary>Retorna uma transação pelo seu identificador (apenas na conta indicada e do usuário autenticado).</summary>

@@ -18,7 +18,11 @@ public static class DependencyInjection
             .BindConfiguration(OutboxWorkerOptions.SectionName)
             .Configure(o =>
             {
-                o.TypeMap[ExecuteTransactionCommandHandler.EventName] = typeof(TransactionRegisteredIntegrationEvent);
+                // mapeia a coleção que sera armazenada a projeção no mongo
+                o.CollectionMap[ExecuteTransactionCommandHandler.EventName] = "transactions";
+                
+                //mapeia o evento que será emitido conforme contrato externo (integration)
+                o.TypeMap[ExecuteTransactionCommandHandler.EventName]  = typeof(TransactionRegisteredIntegrationEvent);
             })
             .ValidateOnStart();
 

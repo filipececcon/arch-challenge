@@ -35,12 +35,13 @@ public sealed class ExecuteTransactionCommandHandler(
 
         MakeOutbox(command, transaction, account);
 
-        return Result<ExecuteTransactionResult>.Ok(
-            new ExecuteTransactionResult(
-                transaction.Id, transaction.AccountId,
-                transaction.Type.ToString(), transaction.Amount,
-                transaction.BalanceAfter, transaction.Description,
-                transaction.CreatedAt));
+        var data = new ExecuteTransactionResult(
+            transaction.Id, transaction.AccountId,
+            transaction.Type.ToString(), transaction.Amount,
+            transaction.BalanceAfter, transaction.Description,
+            transaction.CreatedAt); 
+        
+        return Result<ExecuteTransactionResult>.Ok(data);
     }
 
     private void MakeOutbox(ExecuteTransactionCommand command, Transaction transaction, Account account)
