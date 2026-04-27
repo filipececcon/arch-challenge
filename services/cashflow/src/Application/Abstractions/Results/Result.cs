@@ -28,6 +28,8 @@ public sealed record Result<T> : IResult where T : class
     [JsonPropertyName("errors")]
     public IReadOnlyList<string> Errors { get; init; } = [];
 
+    public object? GetData() => Data;
+
     public static Result<T> Ok(T? data, int statusCode = 200)
     {
         Ensure2xx(statusCode);

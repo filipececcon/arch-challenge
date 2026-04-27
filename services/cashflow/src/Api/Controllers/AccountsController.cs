@@ -1,4 +1,3 @@
-using ArchChallenge.CashFlow.Api.Extensions;
 using ArchChallenge.CashFlow.Application.Abstractions.Results;
 using ArchChallenge.CashFlow.Application.Accounts.Activate;
 using ArchChallenge.CashFlow.Application.Accounts.Create;
@@ -22,11 +21,11 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(typeof(Result<CreateAccountResult>), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(CancellationToken cancellationToken)
     {
-        var command  = new CreateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var command  = new CreateAccountCommand();
+        
         var envelope = await mediator.Send(command, cancellationToken);
 
-        if (envelope.IsSuccess)
-            return CreatedAtAction(nameof(GetMe), null, envelope);
+        if (envelope.IsSuccess) return CreatedAtAction(nameof(GetMe), null, envelope);
 
         return envelope.ToActionResult();
     }
@@ -39,7 +38,10 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMe(CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetMyAccountQuery(UserIdentity.ResolveUserId(User)), cancellationToken);
+        var query = new GetMyAccountQuery(UserIdentity.ResolveUserId(User));
+        
+        var result = await mediator.Send(query, cancellationToken);
+        
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -52,8 +54,10 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Deactivate(CancellationToken cancellationToken)
     {
-        var command  = new DeactivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var command  = new DeactivateAccountCommand();
+        
         var envelope = await mediator.Send(command, cancellationToken);
+        
         return envelope.ToActionResult();
     }
 
@@ -65,8 +69,10 @@ public class AccountsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Activate(CancellationToken cancellationToken)
     {
-        var command  = new ActivateAccountCommand { UserId = UserIdentity.ResolveUserId(User) };
+        var command  = new ActivateAccountCommand();
+        
         var envelope = await mediator.Send(command, cancellationToken);
+        
         return envelope.ToActionResult();
     }
 }

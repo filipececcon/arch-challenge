@@ -6,12 +6,17 @@ public sealed class GetMyAccountQueryHandler(IReadRepository<Account> accountRep
     public async Task<GetMyAccountResult?> Handle(GetMyAccountQuery request, CancellationToken cancellationToken)
     {
         var spec = new AccountByUserIdSpec(request.UserId);
+        
         var account = await accountRepository.FirstOrDefaultAsync(spec, cancellationToken);
 
         if (account is null) return null;
 
         return new GetMyAccountResult(
-            account.Id, account.UserId, account.Balance,
-            account.Active, account.CreatedAt, account.UpdatedAt);
+            account.Id, 
+            account.UserId, 
+            account.Balance,
+            account.Active, 
+            account.CreatedAt, 
+            account.UpdatedAt);
     }
 }

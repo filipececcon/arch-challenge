@@ -7,6 +7,5 @@ namespace ArchChallenge.CashFlow.Domain.Shared.Audit;
 public interface IAuditable
 {
     string UserId { get; set; }
-
     DateTime OccurredAt { get; set; }
 }

@@ -42,26 +42,32 @@
   </data>
 
   <!-- Validation messages -->
-  <data name="Validation_TransactionType_Invalid" xml:space="preserve">
+  <data name="Validation_Transaction_Type_Invalid" xml:space="preserve">
     <value>Invalid transaction type. Use Credit or Debit.</value>
   </data>
-  <data name="Validation_Amount_GreaterThanZero" xml:space="preserve">
+  <data name="Validation_Transaction_Amount_GreaterThanZero" xml:space="preserve">
     <value>Amount must be greater than zero.</value>
   </data>
-  <data name="Validation_Description_MaxLength" xml:space="preserve">
+  <data name="Validation_Transaction_Description_MaxLength" xml:space="preserve">
     <value>Description cannot exceed 255 characters.</value>
   </data>
   <data name="Validation_Transaction_NotFound" xml:space="preserve">
     <value>Transaction '{0}' not found.</value>
   </data>
-  <data name="Validation_GetAll_AmountRange" xml:space="preserve">
+  <data name="Validation_Transaction_GetAll_AmountRange" xml:space="preserve">
     <value>minAmount must be less than or equal to maxAmount.</value>
   </data>
-  <data name="Validation_GetAll_CreatedAtRange" xml:space="preserve">
+  <data name="Validation_Transaction_GetAll_CreatedAtRange" xml:space="preserve">
     <value>createdFrom must be less than or equal to createdTo.</value>
   </data>
-  <data name="Validation_Entity_NotFound" xml:space="preserve">
-    <value>The register was not found</value>
+  <data name="Validation_Transaction_Account_Deactivated" xml:space="preserve">
+    <value>The transaction account is inactive.</value>
+  </data>
+  <data name="Validation_Account_NotFound" xml:space="preserve">
+    <value>The account is not found.</value>
+  </data>
+  <data name="Validation_Account_AlreadyExists" xml:space="preserve">
+    <value>The account is already exists.</value>
   </data>
 </root>
 

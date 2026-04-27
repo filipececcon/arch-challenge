@@ -2,11 +2,13 @@ using ArchChallenge.CashFlow.Domain.Enums;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Enqueue;
 
+/// <summary>
+/// Fluxo de enfileiramento: valida a entrada e publica a mensagem no broker.
+/// Sem UnitOfWork, sem Outbox, sem auditoria.
+/// </summary>
 public record EnqueueTransactionCommand(TransactionType Type, decimal Amount, string? Description)
-    : IAuditable, IRequest<EnqueueResult>
+    : EnqueueCommand<EnqueueTransactionResult>
 {
-    public string UserId { get; set; } = string.Empty;
-    public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
     public Guid? IdempotencyKey { get; init; }
 
     public EnqueueTransactionMessage BuildMessage(Guid taskId) =>

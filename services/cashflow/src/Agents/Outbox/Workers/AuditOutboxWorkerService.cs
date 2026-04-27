@@ -58,9 +58,7 @@ public sealed class AuditOutboxWorkerService(
         {
             outbox.IncrementRetry();
 
-            var level = outbox.RetryCount >= _options.MaxRetries
-                ? LogLevel.Critical
-                : LogLevel.Warning;
+            var level = outbox.RetryCount >= _options.MaxRetries ? LogLevel.Critical : LogLevel.Warning;
 
             logger.Log(level, ex,
                 "[{WorkerName}] Failed to process OutboxId={OutboxId}. " +

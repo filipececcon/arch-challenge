@@ -1,85 +1,86 @@
 using System.Text.Json;
-using ArchChallenge.CashFlow.Application.Abstractions.Audit;
-using ArchChallenge.CashFlow.Application.Abstractions.Tasks;
+using ArchChallenge.CashFlow.Application.Abstractions.Outbox;
+using ArchChallenge.CashFlow.Application.Abstractions.Results;
 using ArchChallenge.CashFlow.Application.Abstractions.Utils;
+using ArchChallenge.CashFlow.Application.Accounts.Audit;
 using ArchChallenge.Contracts.Events;
 
 namespace ArchChallenge.CashFlow.Application.Transactions.Execute;
 
 public sealed class ExecuteTransactionCommandHandler(
-    IUnitOfWork unitOfWork,
-    IOutboxRepository outboxRepository,
-    ITaskCacheService taskCache,
+    IOutboxContext outboxContext,
     IStringLocalizer<Messages> localizer,
     IReadRepository<Account> readRepository)
-    : IRequestHandler<ExecuteTransactionCommand>
+    : IRequestHandler<ExecuteTransactionCommand, Result<ExecuteTransactionResult>>
 {
     public const string EventName = "TransactionExecuted";
 
-    public async Task Handle(ExecuteTransactionCommand command, CancellationToken cancellationToken)
+    public async Task<Result<ExecuteTransactionResult>> Handle(
+        ExecuteTransactionCommand command, CancellationToken cancellationToken)
     {
-        await using var tx = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var (account, result) = await ValidateBusiness(command, cancellationToken);
+        
+        if (account is null || result.IsFailure) return result;
 
-        Transaction? transaction = null;
+        var transaction = new Transaction(command.Type, command.Amount, command.Description);
+        
+        account.AddTransaction(transaction);
 
-        try
+        if (account.IsFailure)
         {
-            var account = await readRepository.FirstOrDefaultAsync(
-                new AccountByUserIdSpec(command.UserId), cancellationToken);
-
-            if (account is null)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                
-                await taskCache.SetFailureAsync(command.TaskId,
-                    [localizer[MessageKeys.Validation.EntityNotFound].Value], cancellationToken);
-                
-                return;
-            }
-
-            transaction = new Transaction(command.Type, command.Amount, command.Description);
+            var errors = account.Notifications.Select(n => $"{n.Key} {n.Message}".Trim()).ToArray();
             
-            account.AddTransaction(transaction);
-
-            if (account.IsFailure)
-            {
-                var errors = account.Notifications.Select(n => $"{n.Key} {n.Message}".Trim()).ToArray();
-                await tx.RollbackAsync(cancellationToken);
-                await taskCache.SetFailureAsync(command.TaskId, errors, cancellationToken);
-                return;
-            }
-
-            var mongoJson = JsonSerializer.Serialize(transaction, transaction.GetType(), SerializeUtils.EntityJsonOptions);
-            await outboxRepository.AddAsync(Outbox.ForMongo(EventName, mongoJson), cancellationToken);
-
-            var auditJson = AuditPayloadBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt, relatedTransactionId: transaction.Id);
-            await outboxRepository.AddAsync(Outbox.ForAudit(EventName, auditJson), cancellationToken);
-
-            var integrationEvent = new TransactionRegisteredIntegrationEvent(
-                transaction.Id, EventName, command.OccurredAt,
-                new TransactionRegisteredPayload(
-                    transaction.Type.ToString().ToUpperInvariant(),
-                    transaction.Amount,
-                    transaction.AccountId,
-                    transaction.BalanceAfter,
-                    transaction.Description,
-                    command.UserId));
-            
-            var eventsJson = JsonSerializer.Serialize(integrationEvent, SerializeUtils.EntityJsonOptions);
-            await outboxRepository.AddAsync(Outbox.ForEvents(EventName, eventsJson), cancellationToken);
-
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-
-            var payload = JsonSerializer.SerializeToElement(transaction, SerializeUtils.EntityJsonOptions);
-            await taskCache.SetSuccessAsync(command.TaskId, payload, cancellationToken);
+            return Result<ExecuteTransactionResult>.Fail(400, errors);
         }
-        catch
-        {
-            await tx.RollbackAsync(cancellationToken);
-            await taskCache.SetFailureAsync(command.TaskId,
-                [localizer[MessageKeys.Exception.InternalError].Value], cancellationToken);
-            throw;
-        }
+
+        MakeOutbox(command, transaction, account);
+
+        return Result<ExecuteTransactionResult>.Ok(
+            new ExecuteTransactionResult(
+                transaction.Id, transaction.AccountId,
+                transaction.Type.ToString(), transaction.Amount,
+                transaction.BalanceAfter, transaction.Description,
+                transaction.CreatedAt));
+    }
+
+    private void MakeOutbox(ExecuteTransactionCommand command, Transaction transaction, Account account)
+    {
+        outboxContext.AddMongo(EventName,
+            JsonSerializer.Serialize(transaction, transaction.GetType(), SerializeUtils.EntityJsonOptions));
+
+        outboxContext.AddAudit(EventName,
+            AccountAuditBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt,
+                relatedTransactionId: transaction.Id));
+
+        outboxContext.AddEvent(EventName,
+            JsonSerializer.Serialize(
+                new TransactionRegisteredIntegrationEvent(
+                    transaction.Id, EventName, command.OccurredAt,
+                    new TransactionRegisteredPayload(
+                        transaction.Type.ToString().ToUpperInvariant(),
+                        transaction.Amount,
+                        transaction.AccountId,
+                        transaction.BalanceAfter,
+                        transaction.Description,
+                        command.UserId)),
+                SerializeUtils.EntityJsonOptions));
+    }
+
+    private async Task<(Account? account, Result<ExecuteTransactionResult> result)> ValidateBusiness(ExecuteTransactionCommand command, CancellationToken cancellationToken)
+    {
+        var spec = new AccountByUserIdSpec(command.UserId); 
+        
+        var account = await readRepository.FirstOrDefaultAsync(spec, cancellationToken);
+
+        if (account is null)
+            return (account, Result<ExecuteTransactionResult>.NotFound(localizer[MessageKeys.Validation.Account.NotFound].Value));
+        
+        if(!account.Active)
+            return (account, Result<ExecuteTransactionResult>.NotFound(localizer[MessageKeys.Validation.Transaction.AccountDeactivated].Value));
+
+        Result<ExecuteTransactionResult>? result = null;
+        
+        return (account, result)!;
     }
 }
+

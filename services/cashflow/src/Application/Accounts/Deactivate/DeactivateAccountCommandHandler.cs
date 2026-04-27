@@ -1,11 +1,12 @@
-using ArchChallenge.CashFlow.Application.Abstractions.Audit;
+using ArchChallenge.CashFlow.Application.Abstractions.Outbox;
 using ArchChallenge.CashFlow.Application.Abstractions.Responses;
 using ArchChallenge.CashFlow.Application.Abstractions.Results;
+using ArchChallenge.CashFlow.Application.Accounts.Audit;
 
 namespace ArchChallenge.CashFlow.Application.Accounts.Deactivate;
 
 public sealed class DeactivateAccountCommandHandler(
-    IOutboxRepository outboxRepository,
+    IOutboxContext outboxContext,
     IStringLocalizer<Messages> localizer,
     IReadRepository<Account> readRepository,
     IWriteRepository<Account> writeRepository)
@@ -20,16 +21,16 @@ public sealed class DeactivateAccountCommandHandler(
             new AccountByUserIdSpec(command.UserId), cancellationToken);
 
         if (account is null)
-            return Result<NoContentResponse>.NotFound(localizer[MessageKeys.Validation.EntityNotFound].Value);
+            return Result<NoContentResponse>.NotFound(localizer[MessageKeys.Validation.Account.NotFound].Value);
 
         if (!account.Active)
-            return Result<NoContentResponse>.Fail(409, localizer[MessageKeys.Validation.AccountAlreadyExists].Value);
+            return Result<NoContentResponse>.Fail(409, localizer[MessageKeys.Validation.Account.AlreadyExists].Value);
 
         account.Deactivate();
+        
         await writeRepository.UpdateAsync(account, cancellationToken);
 
-        var auditJson = AuditPayloadBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt);
-        await outboxRepository.AddAsync(Outbox.ForAudit(EventName, auditJson), cancellationToken);
+        outboxContext.AddAudit(EventName, AccountAuditBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt));
 
         return Result<NoContentResponse>.Ok(NoContentResponse.Value, 204);
     }

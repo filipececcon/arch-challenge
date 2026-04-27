@@ -3,10 +3,11 @@ namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Common.Co
 /// <summary>
 /// Base para consumers que implementam o padrão mensagem → comando MediatR.
 /// A subclasse só precisa implementar <see cref="BuildCommand"/> para mapear a mensagem.
+/// Aceita tanto <see cref="IRequest"/> (void) quanto <see cref="IRequest{TResponse}"/> (retorno tipado).
 /// </summary>
 public abstract class CommandConsumerBase<TMessage, TCommand>(ISender sender) : ConsumerBase<TMessage>
     where TMessage : class
-    where TCommand : IRequest
+    where TCommand : IBaseRequest
 {
     protected override Task ConsumeAsync(TMessage message, CancellationToken cancellationToken)
         => sender.Send(BuildCommand(message), cancellationToken);

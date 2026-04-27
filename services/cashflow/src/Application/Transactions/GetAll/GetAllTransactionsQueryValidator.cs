@@ -12,21 +12,21 @@ public sealed class GetAllTransactionsQueryValidator : AbstractValidator<GetAllT
         {
             RuleFor(q => q.Type!)
                 .Must(t => Enum.TryParse<TransactionType>(t, ignoreCase: true, out _))
-                .WithMessage(_ => localizer[MessageKeys.Validation.TransactionTypeInvalid]);
+                .WithMessage(_ => localizer[MessageKeys.Validation.Transaction.TypeInvalid]);
         });
 
         When(q => q.MinAmount.HasValue && q.MaxAmount.HasValue, () =>
         {
             RuleFor(q => q.MaxAmount!.Value)
                 .GreaterThanOrEqualTo(q => q.MinAmount!.Value)
-                .WithMessage(_ => localizer[MessageKeys.Validation.GetAllAmountRange]);
+                .WithMessage(_ => localizer[MessageKeys.Validation.Transaction.GetAllAmountRange]);
         });
 
         When(q => q.CreatedFrom.HasValue && q.CreatedTo.HasValue, () =>
         {
             RuleFor(q => q.CreatedTo!.Value)
                 .GreaterThanOrEqualTo(q => q.CreatedFrom!.Value)
-                .WithMessage(_ => localizer[MessageKeys.Validation.GetAllCreatedAtRange]);
+                .WithMessage(_ => localizer[MessageKeys.Validation.Transaction.GetAllCreatedAtRange]);
         });
     }
 }

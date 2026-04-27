@@ -4,16 +4,15 @@ using ArchChallenge.CashFlow.Application.Abstractions.Tasks;
 namespace ArchChallenge.CashFlow.Application.Transactions.Enqueue;
 
 public sealed class EnqueueTransactionCommandHandler(ITaskCacheService taskCache, IEventBus eventBus)
-    : IRequestHandler<EnqueueTransactionCommand, EnqueueResult>
+    : IRequestHandler<EnqueueTransactionCommand, EnqueueTransactionResult>
 {
-    public async Task<EnqueueResult> Handle(EnqueueTransactionCommand request, CancellationToken cancellationToken)
+    public async Task<EnqueueTransactionResult> Handle(EnqueueTransactionCommand request, CancellationToken cancellationToken)
     {
         if (request.IdempotencyKey is { } key)
         {
             var existingTaskId = await taskCache.GetIdempotencyAsync(key, cancellationToken);
             
-            if (existingTaskId is not null)
-                return new EnqueueResult(existingTaskId.Value);
+            if (existingTaskId is not null) return new EnqueueTransactionResult(existingTaskId.Value);
         }
 
         var taskId = Guid.NewGuid();
@@ -27,6 +26,6 @@ public sealed class EnqueueTransactionCommandHandler(ITaskCacheService taskCache
         if (request.IdempotencyKey is { } newKey)
             await taskCache.SetIdempotencyAsync(newKey, taskId, cancellationToken);
 
-        return new EnqueueResult(taskId);
+        return new EnqueueTransactionResult(taskId);
     }
 }

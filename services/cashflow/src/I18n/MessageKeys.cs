@@ -12,20 +12,26 @@ public static class MessageKeys
 
     public static class Validation
     {
-        public const string EntityNotFound  = "Validation_Entity_NotFound";
+        public static class Transaction
+        {
+            public const string NotFound                = "Validation_Transaction_NotFound";
+            public const string TypeInvalid             = "Validation_Transaction_Type_Invalid";
+            public const string AmountGreaterThanZero   = "Validation_Transaction_Amount_GreaterThanZero";
+            public const string DescriptionMaxLength    = "Validation_Transaction_Description_MaxLength";
+            public const string AccountDeactivated      = "Validation_Transaction_Account_Deactivated";
         
-        public const string TransactionTypeInvalid  = "Validation_TransactionType_Invalid";
-        public const string AmountGreaterThanZero   = "Validation_Amount_GreaterThanZero";
-        public const string DescriptionMaxLength    = "Validation_Description_MaxLength";
-        public const string TransactionNotFound     = "Validation_Transaction_NotFound";
-        public const string AccountAlreadyExists    = "Validation_Account_AlreadyExists";
-        public const string AccountNotFound         = "Validation_Account_NotFound";
+            /// <summary>Filtro de lista: <c>minAmount</c> não pode ser maior que <c>maxAmount</c>.</summary>
+            public const string GetAllAmountRange = "Validation_Transaction_GetAll_AmountRange";
 
-        /// <summary>Filtro de lista: <c>minAmount</c> não pode ser maior que <c>maxAmount</c>.</summary>
-        public const string GetAllAmountRange = "Validation_GetAll_AmountRange";
+            /// <summary>Filtro de lista: <c>createdFrom</c> não pode ser posterior a <c>createdTo</c>.</summary>
+            public const string GetAllCreatedAtRange = "Validation_Transaction_GetAll_CreatedAtRange";
+        }
 
-        /// <summary>Filtro de lista: <c>createdFrom</c> não pode ser posterior a <c>createdTo</c>.</summary>
-        public const string GetAllCreatedAtRange = "Validation_GetAll_CreatedAtRange";
+        public static class Account
+        {
+            public const string NotFound         = "Validation_Account_NotFound";
+            public const string AlreadyExists    = "Validation_Account_AlreadyExists";
+        }
     }
 }
 

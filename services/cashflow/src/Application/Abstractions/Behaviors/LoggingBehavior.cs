@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using ArchChallenge.CashFlow.Application.Abstractions.Commands;
-using ArchChallenge.CashFlow.Application.Abstractions.Messaging;
 using Microsoft.Extensions.Logging;
 
 namespace ArchChallenge.CashFlow.Application.Abstractions.Behaviors;
@@ -15,7 +13,7 @@ public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior
     {
         var requestName = typeof(TRequest).Name;
         
-        var taskId      = (request as IAsyncCommand)?.TaskId;
+        var taskId      = (request as ITrackedCommand)?.TaskId;
 
         using var scope = BeginScope(requestName, taskId);
 

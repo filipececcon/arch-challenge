@@ -13,13 +13,15 @@ public sealed class IdentityCommandFilter : IAsyncActionFilter
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var principal = context.HttpContext.User;
-        var userId    = UserIdentity.ResolveUserId(principal);
+        
+        var userId= UserIdentity.ResolveUserId(principal);
 
         var occurredAt = DateTime.UtcNow;
 
         foreach (var arg in context.ActionArguments.Values.OfType<IAuditable>())
         {
             arg.UserId     = userId;
+            
             arg.OccurredAt = occurredAt;
         }
 
