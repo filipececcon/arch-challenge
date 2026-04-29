@@ -1,7 +1,10 @@
+using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Abstractions.Outbox;
 using ArchChallenge.CashFlow.Application.Abstractions.Responses;
 using ArchChallenge.CashFlow.Application.Abstractions.Results;
+using ArchChallenge.CashFlow.Application.Abstractions.Utils;
 using ArchChallenge.CashFlow.Application.Accounts.Audit;
+using ArchChallenge.Contracts.Events;
 
 namespace ArchChallenge.CashFlow.Application.Accounts.Deactivate;
 
@@ -31,6 +34,12 @@ public sealed class DeactivateAccountCommandHandler(
         await writeRepository.UpdateAsync(account, cancellationToken);
 
         outboxContext.AddAudit(EventName, AccountAuditBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt));
+
+        outboxContext.AddEvent(EventName,
+            JsonSerializer.Serialize(
+                new AccountDeactivatedIntegrationEvent(account.Id, EventName, command.OccurredAt,
+                    new AccountDeactivatedPayload(account.Id, account.UserId, account.UpdatedAt)),
+                SerializeUtils.EntityJsonOptions));
 
         return Result<NoContentResponse>.Ok(NoContentResponse.Value, 204);
     }

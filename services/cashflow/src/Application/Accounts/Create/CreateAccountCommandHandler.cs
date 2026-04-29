@@ -1,6 +1,9 @@
+using System.Text.Json;
 using ArchChallenge.CashFlow.Application.Abstractions.Outbox;
 using ArchChallenge.CashFlow.Application.Abstractions.Results;
+using ArchChallenge.CashFlow.Application.Abstractions.Utils;
 using ArchChallenge.CashFlow.Application.Accounts.Audit;
+using ArchChallenge.Contracts.Events;
 
 namespace ArchChallenge.CashFlow.Application.Accounts.Create;
 
@@ -27,6 +30,12 @@ public sealed class CreateAccountCommandHandler(
 
         outboxContext.AddAudit(EventName, AccountAuditBuilder.ForAccount(account, EventName, command.UserId, command.OccurredAt));
 
+        outboxContext.AddEvent(EventName,
+            JsonSerializer.Serialize(
+                new AccountCreatedIntegrationEvent(account.Id, EventName, command.OccurredAt,
+                    new AccountCreatedPayload(account.UserId, account.CreatedAt)),
+                SerializeUtils.EntityJsonOptions));
+        
         return Result<CreateAccountResult>.Ok(
             new CreateAccountResult(account.Id, account.UserId, account.Balance, account.CreatedAt),
             201);

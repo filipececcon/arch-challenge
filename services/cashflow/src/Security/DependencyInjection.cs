@@ -1,5 +1,7 @@
+using ArchChallenge.CashFlow.Domain.Shared.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -55,6 +57,9 @@ public static class DependencyInjection
         }
 
         services.AddAuthorization();
+
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserAccessor, HttpCurrentUserAccessor>();
 
         return services;
     }

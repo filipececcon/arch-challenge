@@ -1,12 +1,10 @@
-using ArchChallenge.CashFlow.Infrastructure.CrossCutting.Security.Filters;
-
 Serilog.Debugging.SelfLog.Enable(msg => Console.Error.WriteLine($"[SERILOG INTERNAL] {msg}"));
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddObservability(builder.Configuration);
 
-builder.Services.AddControllers(options => options.Filters.Add<IdentityCommandFilter>());
+builder.Services.AddControllers();
 
 builder.Services.AddSwaggerConfiguration();
 builder.Services.AddLocalizationConfiguration();

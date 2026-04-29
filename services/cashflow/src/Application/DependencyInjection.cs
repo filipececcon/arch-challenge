@@ -12,7 +12,8 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
 
             // Pipeline (mais externo → mais interno):
-            // Logging → Validation → EnqueueTaskCache* → TaskCache** → UnitOfWork → Outbox → Handler
+            // Identity → Logging → Validation → EnqueueTaskCache* → TaskCache** → UnitOfWork → Outbox → Handler
+            cfg.AddOpenBehavior(typeof(IdentityBehavior<,>));
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
             cfg.AddOpenBehavior(typeof(EnqueueBehavior<,>));

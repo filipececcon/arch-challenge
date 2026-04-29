@@ -3,5 +3,14 @@
 @tailwind utilities;
 
 body {
-  @apply min-h-dvh bg-slate-950 text-slate-100 antialiased;
+  @apply h-screen overflow-hidden bg-navy-900 text-slate-100 antialiased;
+}
+
+@layer components {
+  .nav-item {
+    @apply flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-400 transition-colors duration-150 hover:bg-navy-800 hover:text-white;
+  }
+  .nav-item.is-active {
+    @apply bg-brand text-white;
+  }
 }

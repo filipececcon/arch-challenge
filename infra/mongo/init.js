@@ -53,15 +53,17 @@ db.createCollection('transactions');
  * Índices da coleção transactions
  *
  * _id:       ID da transação (string UUID) — upsert idempotente pelo OutboxWorker
+ * accountId: filtros por conta
  * type:      filtros por tipo (CREDIT / DEBIT)
  * createdAt: ordenação cronológica e filtros por data
  */
 db.transactions.createIndex({ type:      1 }, { name: 'idx_type'      });
 db.transactions.createIndex({ createdAt: -1 }, { name: 'idx_created_at' });
-db.transactions.createIndex(
-  { type: 1, createdAt: -1 },
-  { name: 'idx_type_created_at' }
-);
+db.transactions.createIndex({ type: 1, createdAt: -1 },  { name: 'idx_type_created_at' });
+db.transactions.createIndex({ accountId: 1 },                          { name: 'idx_account_id'                });
+db.transactions.createIndex({ accountId: 1, type: 1 },                 { name: 'idx_account_id_type'           });
+db.transactions.createIndex({ accountId: 1, createdAt: -1 },           { name: 'idx_account_id_created_at'     });
+db.transactions.createIndex({ accountId: 1, type: 1, createdAt: -1 },  { name: 'idx_account_id_type_created_at' });
 
 // ── Dashboard: read model (consolidados + idempotência de eventos) ─────────────
 db = db.getSiblingDB('dashboard_read');

@@ -327,7 +327,9 @@ services:
     profiles: [observability]
     restart: unless-stopped
     environment:
-      RABBIT_URL: "amqp://rabbit:rabbit@rabbitmq:5672/"
+      RABBIT_URL: "http://rabbitmq:15672"
+      RABBIT_USER: "rabbit"
+      RABBIT_PASSWORD: "rabbit"
       PUBLISH_PORT: "9419"
     ports:
       - "9419:9419"
