@@ -14,9 +14,11 @@ Para conexão via cliente externo (DBeaver, mongosh, redis-cli, etc.):
 |---|---|---|---|---|
 | PostgreSQL | `localhost:5432` | `postgres` | `postgres` | Bancos `cashflow_db`, `dashboard_db` e `keycloak_db` criados pelo `init.sql` |
 | MongoDB (root) | `localhost:27017` | `root` | `root` | Acesso administrativo |
-| MongoDB (app) | `localhost:27017` | `cashflow` | `cashflow` | Banco `cashflow_read`, coleção `transactions` |
+| MongoDB (cashflow) | `localhost:27017` | `cashflow` | `cashflow` | Banco `cashflow_read`, coleção `transactions` |
+| MongoDB (dashboard) | `localhost:27017` | `dashboard` | `dashboard` | Banco `dashboard_read`, coleções `daily_consolidations`, `processed_integration_events` |
 | Redis | `localhost:6379` | — | — | Sem autenticação neste Compose |
 | RabbitMQ (AMQP) | `localhost:5672` | `rabbit` | `rabbit` | Protocolo AMQP — para a Management UI ver tabela abaixo |
+| ImmuDB (gRPC) | `localhost:3322` | `immudb` | `immudb` | Banco `defaultdb` — métricas em `:9497/metrics` |
 
 ### URIs prontas para uso
 
@@ -25,11 +27,17 @@ Para conexão via cliente externo (DBeaver, mongosh, redis-cli, etc.):
 postgresql://postgres:postgres@localhost:5432/cashflow_db
 postgresql://postgres:postgres@localhost:5432/dashboard_db
 
-# MongoDB (usuário de aplicação)
+# MongoDB (usuário de aplicação — cashflow)
 mongodb://cashflow:cashflow@localhost:27017/cashflow_read
+
+# MongoDB (usuário de aplicação — dashboard)
+mongodb://dashboard:dashboard@localhost:27017/dashboard_read
 
 # Redis
 redis://localhost:6379
+
+# ImmuDB (gRPC)
+localhost:3322 (user: immudb, password: immudb, database: defaultdb)
 ```
 
 ---

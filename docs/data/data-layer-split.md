@@ -1,16 +1,17 @@
-# Esboço: divisão Data (EF + Mongo) e projeto Outbox
+# Divisão de camadas de dados e projeto Outbox
 
-> **Implementação atual no serviço CashFlow:** projetos em `services/cashflow/src/Relational`, `Documents`, `Immutable` e workers em `Agents/Outbox` (assemblies `ArchChallenge.CashFlow.Infrastructure.Data.*`). Use [data/README.md](./README.md) e [architecture/cashflow/](../architecture/cashflow/README.md) como referência principal; o texto abaixo permanece como esboço conceitual de divisão de responsabilidades.
+> **Implementação real no serviço CashFlow:** projetos em `services/cashflow/src/Relational`, `Documents`, `Immutable` e workers em `Agents/Outbox` (assemblies `ArchChallenge.CashFlow.Infrastructure.Data.*` e `Infrastructure.Agents.Outbox`). Use [data/README.md](./README.md) e [architecture/cashflow/](../architecture/cashflow/README.md) como referência principal para detalhes de implementação.
 
-Este documento descreve uma possível organização alinhada à conversa sobre **persistência EF**, **camada de leitura Mongo** e **worker de outbox** como processo ou biblioteca separada.
+Este documento descreve a organização dos projetos de **persistência EF**, **camada de leitura Mongo**, **auditoria imutável** e **workers de outbox** como processo separado.
 
 ## Visão dos projetos
 
-| Projeto sugerido | Responsabilidade |
-|------------------|------------------|
-| **Infrastructure.Data.Ef** | `DbContext`, migrations, repositórios EF (`Read`/`Write`), `UnitOfWork`, configurações de entidades, `OutboxRepository` (tabela de outbox no PostgreSQL). |
-| **Infrastructure.Data.Mongo** | `IMongoClient` / `IMongoDatabase`, registro classe ↔ coleção (`AddMongoCollections`), `IMongoCollectionResolver`, repositórios de leitura/projeção em documentos. |
-| **Infrastructure.Outbox** (ou **Worker.Outbox**) | `OutboxWorkerService` (ou `BackgroundService` equivalente), opções e validação, orquestração: **ler** eventos pendentes via abstrações do EF → **escrever** no Mongo → **marcar** processado no SQL. |
+| Projeto sugerido | Implementação real | Responsabilidade |
+|------------------|---------------------|------------------|
+| **Infrastructure.Data.Ef** | `Infrastructure.Data.Relational` | `DbContext`, migrations, repositórios EF (`Read`/`Write`), `UnitOfWork`, configurações de entidades, `OutboxRepository` (tabela de outbox no PostgreSQL). |
+| **Infrastructure.Data.Mongo** | `Infrastructure.Data.Documents` | `IMongoClient` / `IMongoDatabase`, registro classe ↔ coleção (`AddMongoCollections`), `IDocumentsReadRepository<T>`, `DocumentProjectionWriter`, repositórios de leitura/projeção em documentos. |
+| **Infrastructure.Outbox** (ou **Worker.Outbox**) | `Infrastructure.Agents.Outbox` (projeto `Agents/Outbox`) | Workers (`MongoOutboxWorkerService`, `EventsOutboxWorkerService`, `AuditOutboxWorkerService`), options e validação, orquestração: **ler** eventos pendentes via `IOutboxRepository` → **escrever** no Mongo/ImmuDB/RabbitMQ → **marcar** processado. |
+| — | `Infrastructure.Data.Immutable` | `AuditWriter` (adaptador ImmuDB), `ImmuDbOptions`, `AuditTableConventions`, `ImmuDbHealthCheck` — persistência imutável de auditoria via SQL API. |
 
 Contratos (`IReadRepository<>`, `IOutboxRepository`, documentos de leitura) continuam em **Domain** / **Shared**, conforme já fazem.
 
@@ -20,7 +21,7 @@ Contratos (`IReadRepository<>`, `IOutboxRepository`, documentos de leitura) cont
 flowchart TB
     subgraph apps [Hosts]
         Api[Api]
-        OutboxHost[Outbox Worker Host]
+        OutboxHost[Agents.Outbox Worker Host]
     end
 
     subgraph app_layer [Application]
@@ -33,96 +34,106 @@ flowchart TB
     end
 
     subgraph infra_data [Infraestrutura de dados]
-        DataEf[Infrastructure.Data.Ef]
-        DataMongo[Infrastructure.Data.Mongo]
-        OutboxProj[Infrastructure.Outbox]
+        DataRel[Infrastructure.Data.Relational]
+        DataDoc[Infrastructure.Data.Documents]
+        DataImm[Infrastructure.Data.Immutable]
     end
 
     Api --> Application
-    Api --> DataEf
-    Api --> DataMongo
+    Api --> DataRel
+    Api --> DataDoc
 
     Application --> Domain
     Application --> Shared
 
-    DataEf --> Domain
-    DataEf --> Shared
+    DataRel --> Shared
+    DataDoc --> Shared
+    DataImm --> Shared
 
-    DataMongo --> Domain
-    DataMongo --> Shared
-
-    OutboxProj --> DataEf
-    OutboxProj --> DataMongo
-    OutboxProj --> Shared
-
-    OutboxHost --> OutboxProj
-    OutboxHost --> DataEf
-    OutboxHost --> DataMongo
+    OutboxHost --> DataRel
+    OutboxHost --> DataDoc
+    OutboxHost --> DataImm
+    OutboxHost --> Application
 ```
 
-**Regra:** **Infrastructure.Outbox** não referencia **Api** nem **Application** (apenas orquestra infra e usa contratos de Shared/Domain). Se precisar de tipos de evento, ficam em Shared ou Domain.
+**Regra:** O projeto **Agents.Outbox** não referencia **Api** (apenas orquestra infra e usa contratos de Shared/Domain e abstrações da Application). Os workers dependem de `IOutboxRepository`, `IDocumentProjectionWriter`, `IAuditWriter` e `IEventBus`.
 
-## Fluxo do worker (outbox → Mongo)
+## Fluxo do worker (outbox → destinos)
 
 ```mermaid
 sequenceDiagram
-    participant W as Outbox worker
-    participant EF as Data.Ef / OutboxRepository
-    participant M as Data.Mongo
+    participant W as Outbox Workers
+    participant R as OutboxRepository
     participant PG as PostgreSQL
+    participant M as DocumentProjectionWriter
     participant MG as MongoDB
+    participant IW as AuditWriter
+    participant IM as ImmuDB
+    participant EB as IEventBus
+    participant RQ as RabbitMQ
 
-    W->>EF: Buscar eventos pendentes
-    EF->>PG: SELECT outbox
-    PG-->>EF: linhas
-    EF-->>W: OutboxEvent[]
-    W->>M: Upsert documento (read model)
-    M->>MG: Write collection
-    W->>EF: Marcar processado / atualizar estado
-    EF->>PG: UPDATE outbox
+    W->>R: GetPendingAsync(target, batchSize, maxRetries)
+    R->>PG: SELECT FROM outbox.TB_OUTBOX WHERE DS_TARGET=target FOR UPDATE SKIP LOCKED
+    PG-->>R: Outbox[]
+    R-->>W: registros pendentes
+
+    alt MongoOutboxWorkerService (Target=Mongo)
+        W->>M: UpsertAsync(collectionName, jsonPayload)
+        M->>MG: Upsert documento
+    else AuditOutboxWorkerService (Target=Audit)
+        W->>IW: WriteAuditEntryAsync(entry)
+        IW->>IM: SQLExec INSERT INTO TB_AUDIT_*
+    else EventsOutboxWorkerService (Target=Events)
+        W->>EB: PublishAsync(message, type)
+        EB->>RQ: Publish to exchange
+    end
+
+    W->>R: SaveChangesAsync
+    R->>PG: UPDATE TB_OUTBOX (ST_PROCESSED, DT_PROCESSED_AT)
 ```
 
 ## Onde registrar no DI
 
-| Extensão | Conteúdo típico |
-|----------|-----------------|
-| `AddDataEf` (em **Data.Ef**) | `DbContext`, `IReadRepository<>`, `IWriteRepository<>`, `IUnitOfWork`, `IOutboxRepository`, connection string PostgreSQL. |
-| `AddDataMongo` (em **Data.Mongo**) | `MongoClient`, `IMongoDatabase`, `ICollectionNameRegistry`, `IMongoCollectionResolver`, repositórios Mongo genéricos ou por documento. |
-| `AddOutboxWorker` (em **Outbox**) | `OutboxWorkerOptions`, validador, `HostedService` — **somente** se o host for a Api; se for worker separado, o host chama `AddDataEf` + `AddDataMongo` + registro do worker. |
+| Extensão | Implementação real | Conteúdo típico |
+|----------|---------------------|----------------|
+| `AddRelationalData` (em **Data.Relational**) | `DependencyInjection.cs` | `DbContext`, `IReadRepository<>`, `IWriteRepository<>`, `IUnitOfWork`, `IOutboxRepository`, connection string PostgreSQL, `MigrationsHistoryTable` no schema `control`. |
+| `AddDocumentsData` (em **Data.Documents**) | `DependencyInjection.cs` | `MongoClient`, `IMongoDatabase`, `IDocumentsReadRepository<T>`, `IDocumentProjectionWriter`, coleções registradas por tipo. |
+| `AddImmutableData` (em **Data.Immutable**) | `DependencyInjection.cs` | `IAuditWriter` (singleton), `ImmuDbOptions`, `ImmuDbHealthCheck`. |
+| `AddOutboxAgent` (em **Agents.Outbox**) | `DependencyInjection.cs` | `OutboxWorkerOptions` + validação, `AuditWorkerOptions`, `CollectionMap`, `TypeMap`, três `HostedService`s. |
 
-A **Api** atual pode continuar chamando os três se o outbox rodar no mesmo processo; caso contrário, a Api chama `AddDataEf` + `AddDataMongo` (se expuser leitura Mongo na API) e o **OutboxHost** chama `AddDataEf` + `AddDataMongo` + `AddOutboxWorker`.
+A **Api** chama `AddRelationalData` + `AddDocumentsData` + demais cross-cutting. O **Agents/Outbox** host (worker separado com `Program.cs` próprio) chama `AddRelationalData` + `AddDocumentsData` + `AddMessagingPublisher` + `AddImmutableData` + `AddOutboxAgent`.
 
-## Mapeamento a partir do `Data` atual
+## Mapeamento do código atual
 
-| Local hoje (`src/Data`) | Destino sugerido |
-|-------------------------|------------------|
-| `Contexts/CashFlowDbContext.cs`, `Configurations/*`, `Migrations/*` | **Infrastructure.Data.Ef** |
-| `Repositories/ReadRepository.cs`, `WriteRepository.cs`, `UnitOfWork`, `Specifications/*` | **Infrastructure.Data.Ef** |
-| `Repositories/OutboxRepository.cs` | **Infrastructure.Data.Ef** (outbox é tabela relacional) |
-| `Outbox/OutboxWorker*.cs` | **Infrastructure.Outbox** (ou projeto Worker) |
-| `DependencyInjection.cs` | Dividir em `AddDataEf` / `AddDataMongo` / `AddOutboxWorker`; composição na Api ou Program do worker |
-| Pacotes | **Data.Ef:** EF + Npgsql. **Data.Mongo:** MongoDB.Driver apenas. **Outbox:** Hosting.Abstractions + referências aos dois Data |
-
-Código que hoje usa `IMongoDatabase` dentro de `OutboxWorkerService` passaria a depender de abstrações em **Data.Mongo** (por exemplo, `IMongoCollectionResolver` ou um serviço de projeção explícito).
+| Local no código | Projeto / Namespace |
+|-----------------|---------------------|
+| `src/Relational/Contexts/CashFlowDbContext.cs`, `Configurations/*`, `Migrations/*` | **Infrastructure.Data.Relational** |
+| `src/Relational/Repositories/ReadRepository.cs`, `WriteRepository.cs`, `UnitOfWork.cs`, `Specifications/*` | **Infrastructure.Data.Relational** |
+| `src/Relational/Repositories/OutboxRepository.cs` | **Infrastructure.Data.Relational** (outbox é tabela relacional) |
+| `src/Documents/` (Repositories, Models, ProjectionWriter) | **Infrastructure.Data.Documents** |
+| `src/Immutable/` (Writers, Options, Conventions, Healthcheck) | **Infrastructure.Data.Immutable** |
+| `src/Agents/Outbox/Workers/` (`Mongo`, `Events`, `Audit`) | **Infrastructure.Agents.Outbox** (worker separado) |
+| `src/Agents/Outbox/DependencyInjection.cs` | Composição no `Program.cs` do worker |
+| Pacotes | **Relational:** EF + Npgsql. **Documents:** MongoDB.Driver. **Immutable:** ImmuDB4Net. **Agents.Outbox:** Hosting.Abstractions + referências aos três Data + Messaging |
 
 ## Pastas na solução (Solution Explorer)
 
-Sugestão de pastas de solução (alinhadas ao `ArchChallenge.CashFlow.sln`):
-
 - **3.2 Data**
-  - `Infrastructure.Data.Ef`
-  - `Infrastructure.Data.Mongo`
+  - `Infrastructure.Data.Relational`
+  - `Infrastructure.Data.Documents`
+  - `Infrastructure.Data.Immutable`
 - **3. Infrastructure** (ou subpasta **Workers**)
-  - `Infrastructure.Outbox`
+  - `Infrastructure.Agents.Outbox`
 
-## Nomes de assembly (exemplo)
+## Nomes de assembly (implementação real)
 
-- `ArchChallenge.CashFlow.Infrastructure.Data.Ef`
-- `ArchChallenge.CashFlow.Infrastructure.Data.Mongo`
-- `ArchChallenge.CashFlow.Infrastructure.Outbox`
+- `ArchChallenge.CashFlow.Infrastructure.Data.Relational`
+- `ArchChallenge.CashFlow.Infrastructure.Data.Documents`
+- `ArchChallenge.CashFlow.Infrastructure.Data.Immutable`
+- `ArchChallenge.CashFlow.Infrastructure.Agents.Outbox`
 
 Ajuste os nomes ao padrão que a solução `arch-challenge` usar nos outros serviços.
 
 ---
 
-*Documento esboço — refinar ao implementar a divisão real de projetos.*
+*Documento atualizado para refletir a implementação real dos projetos.*
