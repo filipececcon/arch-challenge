@@ -1,0 +1,105 @@
+# Políticas de rede para ferramentas de observabilidade e administração.
+# Acesso restrito ao CIDR da VPN — nenhum ingress externo permitido.
+# Requer CNI com suporte a NetworkPolicy (Calico, Cilium, etc.).
+#
+# AJUSTE OBRIGATÓRIO: substitua <vpn-cidr> pelo CIDR real da sua VPN antes do deploy.
+#   WireGuard típico : 10.8.0.0/24
+#   Tailscale        : 100.64.0.0/10
+#
+# Documentação: docs/security/service-to-service.md
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-vpn-only
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.8.0.0/24   # ← substitua pelo CIDR da sua VPN
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kibana-vpn-only
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kibana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.8.0.0/24   # ← substitua pelo CIDR da sua VPN
+      ports:
+        - protocol: TCP
+          port: 5601
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-vpn-only
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.8.0.0/24   # ← substitua pelo CIDR da sua VPN
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-access-control
+  namespace: arch-challenge
+  labels:
+    app.kubernetes.io/part-of: cashflow-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    # AMQP — apenas pelos pods de negócio (cashflow-api e dashboard-api)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cashflow-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dashboard-api
+      ports:
+        - protocol: TCP
+          port: 5672
+    # Management UI — apenas via VPN
+    - from:
+        - ipBlock:
+            cidr: 10.8.0.0/24   # ← substitua pelo CIDR da sua VPN
+      ports:
+        - protocol: TCP
+          port: 15672

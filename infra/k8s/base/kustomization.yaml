@@ -15,6 +15,7 @@ resources:
   - gateway-pdb.yaml
   - ingress.yaml
   - networkpolicy.yaml
+  - networkpolicy-observability.yaml
 
 labels:
   - pairs:

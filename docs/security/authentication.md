@@ -10,8 +10,6 @@ Todos os clientes (Angular frontend) utilizam o **Authorization Code Flow com PK
 
 ## Fluxo de autenticação detalhado
 
-> Diagrama de sequência completo: [`diagrams/auth-oidc-flow.mmd`](./diagrams/auth-oidc-flow.mmd)
-
 ```mermaid
 %%{init: {"sequence": {"mirrorActors": false}}}%%
 sequenceDiagram
@@ -137,8 +135,6 @@ export const environment = {
 ## Logout
 
 O logout deve ser realizado tanto no Angular quanto no Keycloak para garantir que a sessão SSO seja encerrada.
-
-> Diagrama de sequência completo: [`diagrams/logout-flow.mmd`](./diagrams/logout-flow.mmd)
 
 ```mermaid
 sequenceDiagram

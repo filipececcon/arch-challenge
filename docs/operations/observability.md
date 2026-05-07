@@ -8,7 +8,43 @@ Este documento descreve a estratégia de observabilidade adotada para o sistema 
 
 O diagrama de componentes da plataforma de observabilidade está em `**[docs/architecture/diagrams/Architecture-C3 - Observability.png](../architecture/diagrams/Architecture-C3%20-%20Observability.png)`** (C3-b no modelo C4 — ver `[docs/architecture/README.md](../architecture/README.md)`).
 
-O diagrama de fluxo de dados (Mermaid) está em `[diagrams/observability-overview.mmd](./diagrams/observability-overview.mmd)`. Abra o ficheiro no IDE com extensão Mermaid ou exporte para SVG/PNG a partir do [Mermaid Live Editor](https://mermaid.live/).
+O diagrama de fluxo de dados da plataforma de observabilidade, incluindo o acesso operacional via VPN:
+
+```mermaid
+flowchart TB
+    subgraph apps["Aplicações"]
+        CF["CashFlow API"]
+        DA["Dashboard API"]
+        GW["API Gateway (Ocelot)"]
+    end
+
+    apps --> serilog["Serilog → stdout<br/>(JSON estruturado)"]
+    apps --> apm_agent["Elastic APM Agent<br/>(traces automáticos)"]
+    apps --> prom_net["prometheus-net<br/>(endpoint /metrics)"]
+
+    serilog -.-> fb["Fluent Bit<br/>(ingestor de logs — planejado ADR-011)"]
+    fb -.-> es[("Elasticsearch")]
+
+    apm_agent --> apm_srv["Elastic APM Server"]
+    apm_srv --> es
+
+    prom_net --> prom["Prometheus<br/>(scrape /metrics)"]
+    prom --> grafana["Grafana<br/>Dashboards + Alertas"]
+    grafana -. "datasource ES" .-> es
+    es --> kibana["Kibana<br/>Logs + APM Traces"]
+
+    subgraph vpn_access["🔐 Acesso operacional — VPN obrigatória"]
+        OPS[("🔧 Operador / Dev")]
+        VPN["VPN Gateway<br/>CIDR: &lt;vpn-cidr&gt;"]
+        OPS -->|"túnel VPN"| VPN
+    end
+
+    VPN -->|"NetworkPolicy: ipBlock (K8s)"| grafana
+    VPN -->|"NetworkPolicy: ipBlock (K8s)"| kibana
+    VPN -->|"NetworkPolicy: ipBlock (K8s)"| prom
+
+    style vpn_access fill:#f87171,stroke:#991b1b
+```
 
 ---
 
@@ -18,7 +54,48 @@ O diagrama de fluxo de dados (Mermaid) está em `[diagrams/observability-overvie
 
 As aplicações escrevem logs exclusivamente em `stdout` no formato JSON estruturado via **Serilog**. Um agente externo — **Fluent Bit** — lê esses logs dos containers Docker e os encaminha ao Elasticsearch.
 
-> Diagrama de sequência do pipeline completo: `[diagrams/log-pipeline.mmd](./diagrams/log-pipeline.mmd)`
+```mermaid
+sequenceDiagram
+    autonumber
+
+    participant App as Aplicação<br/>(CashFlow / Dashboard / Gateway)
+    participant Stdout as stdout<br/>(container Docker)
+    participant Docker as Docker Engine<br/>/var/lib/docker/containers/
+    participant FB as Fluent Bit
+    participant Buf as Buffer em Disco<br/>(volume Docker)
+    participant ES as Elasticsearch
+    participant KB as Kibana
+
+    App->>Stdout: Serilog.WriteTo.Console(ElasticsearchJsonFormatter)<br/>{"@timestamp":"...","level":"Info","message":"..."}
+    Stdout->>Docker: Docker captura stdout e grava em arquivo JSON<br/>/var/lib/docker/containers/<id>/<id>-json.log
+
+    loop A cada 5 segundos (flush interval)
+        FB->>Docker: tail /var/lib/docker/containers/*/*.log<br/>(lê novos registros desde o último offset)
+        Docker->>FB: Linhas JSON brutas do Docker
+
+        FB->>FB: Parser "docker" decodifica o envelope Docker<br/>Extrai campo "log" (conteúdo real do Serilog)<br/>Enriquece com metadados: container_name, image, labels
+
+        alt Elasticsearch disponível
+            FB->>ES: POST /_bulk (lote de logs)<br/>Índice: cashflow-logs-YYYY.MM.DD
+            ES->>FB: 200 OK
+            FB->>FB: Salva novo offset (não reprocessa)
+        else Elasticsearch indisponível
+            FB->>Buf: Persiste chunks em disco<br/>/var/log/fluentbit/buffer/<timestamp>.chunk
+            Note over Buf: Buffer cresce até ES voltar<br/>Sobrevive a restart do Fluent Bit
+        end
+    end
+
+    Note over FB,Buf: Quando Elasticsearch volta
+
+    FB->>Buf: Lê chunks pendentes do disco
+    Buf->>FB: Chunks não entregues
+    FB->>ES: POST /_bulk (reentrega dos chunks)
+    ES->>FB: 200 OK
+    FB->>Buf: Remove chunks entregues com sucesso
+
+    ES->>KB: Kibana indexa e disponibiliza para pesquisa
+    Note over KB: Logs pesquisáveis em Kibana<br/>Correlacionados com traces do APM<br/>via trace.id injetado pelo Elastic APM Agent
+```
 
 > Decisão documentada em: [ADR-011 — Fluent Bit como Ingestor de Logs](../decisions/ADR-011-fluent-bit-ingestor-de-logs.md)
 

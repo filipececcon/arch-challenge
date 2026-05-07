@@ -134,22 +134,24 @@ Um serviço chamando outro serviço não representa um usuário — é uma comun
 
 ### Fluxo Client Credentials
 
-> Diagrama de sequência completo: [`diagrams/client-credentials-m2m.mmd`](./diagrams/client-credentials-m2m.mmd)
-
 ```mermaid
 sequenceDiagram
     autonumber
-    participant S as Serviço Cliente
-    participant K as Keycloak
+    participant S as Serviço Cliente<br/>(ex: relatorios-api)
+    participant K as Keycloak<br/>(realm: cashflow)
     participant G as Ocelot Gateway
     participant D as Dashboard API
-
-    S->>K: POST /token — grant_type=client_credentials
-    K->>S: access_token (sub = "relatorios-api", roles = ["gestor"])
-    S->>G: GET /dashboard/v1/daily-balances — Bearer <access_token>
-    G->>G: Valida JWT + verifica role "gestor"
-    G->>D: Roteia requisição
-    D->>S: 200 OK + dados do consolidado
+    Note over S,D: Comunicação machine-to-machine (sem usuário humano)
+    S->>K: POST /protocol/openid-connect/token<br/>grant_type=client_credentials<br/>&client_id=relatorios-api<br/>&client_secret=<secret>
+    K->>K: Valida client_id e client_secret<br/>Verifica Service Account ativo<br/>Resolve roles do Service Account
+    K->>S: access_token (JWT)<br/>sub = "relatorios-api"<br/>realm_access.roles = ["gestor"]
+    Note over S: Token armazenado em memória<br/>Renovado antes de expirar
+    S->>G: GET /dashboard/v1/daily-balances<br/>Authorization: Bearer <access_token>
+    G->>G: Valida JWT<br/>Executa KeycloakRolesClaimsTransformation<br/>Verifica RouteClaimsRequirement:<br/>rota /dashboard/v1/** exige "gestor" ou "admin"<br/>✅ Service Account tem role "gestor"
+    G->>D: Proxy HTTP downstream
+    D->>G: 200 OK + consolidado
+    G->>S: 200 OK + dados
+    Note over S,D: Princípio do mínimo privilégio:<br/>relatorios-api tem apenas role "gestor"<br/>Tentativa de acessar /cashflow/v1/** retorna 403
 ```
 
 ### Configuração dos clients M2M no Keycloak
@@ -190,6 +192,57 @@ Se no futuro for necessário expor `sub` ou roles como headers separados (por ex
 ```
 
 > **Importante:** qualquer extensão desse tipo deve ser adicionada **explicitamente** ao `ocelot.json` e revisada no PR — **não** está habilitada no repositório hoje.
+
+---
+
+## Acesso às ferramentas de operação — VPN obrigatória
+
+As ferramentas de observabilidade e administração (**Grafana, Kibana, Prometheus e RabbitMQ Management**) **não possuem rota no Ingress** e não são acessíveis pela internet em nenhum ambiente.
+
+O acesso operacional exige **conexão prévia à VPN** da infraestrutura. A VPN é provisionada fora deste repositório — na camada de rede do cloud provider ou servidor dedicado — e é o mecanismo de isolamento de rede primário para o plano de controle.
+
+```
+Operador / Dev
+  └─ conecta VPN (WireGuard / Tailscale / OpenVPN)
+       └─ obtém IP no range <vpn-cidr>
+            └─ acessa IP interno do cluster
+                 ├─ kubectl port-forward <pod> <porta>:<porta>
+                 └─ ou Service ClusterIP (sem Ingress público)
+```
+
+```mermaid
+sequenceDiagram
+    actor OPS as Operador / Dev
+    participant VPN as VPN Gateway
+    participant NP as NetworkPolicy K8s
+    participant OBS as Grafana / Kibana / Prometheus / RabbitMQ Mgmt
+
+    OPS->>VPN: autentica e conecta túnel VPN
+    VPN-->>OPS: IP atribuído no range vpn-cidr
+
+    OPS->>NP: requisição originada de vpn-cidr
+    NP->>NP: valida ipBlock.cidr
+    alt IP dentro do CIDR da VPN
+        NP->>OBS: libera acesso
+        OBS-->>OPS: 200 OK — interface disponível
+    else IP fora do CIDR
+        NP-->>OPS: conexão bloqueada
+    end
+```
+
+### Reforço via NetworkPolicy (Kubernetes)
+
+O isolamento da VPN é reforçado em nível de rede do cluster pelo manifesto `infra/k8s/base/networkpolicy-observability.yaml`. Cada ferramenta tem uma `NetworkPolicy` dedicada que:
+
+- Define `policyTypes: [Ingress]` — nenhum ingress é permitido por padrão
+- Libera ingress **exclusivamente do CIDR da VPN** (`ipBlock.cidr: <vpn-cidr>`)
+- Mantém o RabbitMQ AMQP (:5672) acessível pelos pods de negócio internamente, isolando apenas a Management UI (:15672) para o CIDR da VPN
+
+> **Ajuste obrigatório antes do deploy:** substitua `<vpn-cidr>` pelo CIDR real da sua VPN no arquivo `networkpolicy-observability.yaml`.
+> - WireGuard típico: `10.8.0.0/24`
+> - Tailscale: `100.64.0.0/10`
+
+> **Pré-requisito K8s:** o CNI do cluster deve suportar `NetworkPolicy` — Calico ou Cilium. Já documentado em `docs/operations/kubernetes.md`.
 
 ---
 

@@ -101,6 +101,58 @@ builder.Services.AddSingleton<IClaimsTransformation, KeycloakRolesClaimsTransfor
 
 ---
 
+### Problema adicional: Ocelot não suporta roles separadas por vírgula nativamente
+
+O `RouteClaimsRequirement` permite configurar múltiplas roles alternativas no `ocelot.json` usando vírgula:
+
+```json
+"RouteClaimsRequirement": {
+  "roles": "comerciante,admin"
+}
+```
+
+O comportamento padrão do Ocelot (`DefaultClaimsAuthorizer`) trata o valor como uma string literal e exige correspondência exata — ou seja, um token com apenas o claim `roles=comerciante` seria rejeitado porque o valor não é exatamente `"comerciante,admin"`.
+
+### Solução: `CommaSeparatedRolesClaimsAuthorizer`
+
+É necessário implementar um `IClaimsAuthorizer` customizado que interprete o valor como uma lista de alternativas separadas por vírgula e autorize se o usuário possuir **ao menos uma** delas:
+
+```csharp
+public sealed class CommaSeparatedRolesClaimsAuthorizer : IClaimsAuthorizer
+{
+    public Response<bool> Authorize(
+        ClaimsPrincipal claimsPrincipal,
+        Dictionary<string, string> routeClaimsRequirement,
+        List<PlaceholderNameAndValue> urlPathPlaceholderNameAndValues)
+    {
+        foreach (var required in routeClaimsRequirement)
+        {
+            var values = _claimsParser.GetValuesByClaimType(claimsPrincipal.Claims, required.Key);
+            // ...
+
+            var requiredAlternatives = required.Value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var authorized = requiredAlternatives.Any(alt => values.Data.Contains(alt));
+            if (!authorized)
+                return new ErrorResponse<bool>(new ClaimValueNotAuthorizedError(...));
+        }
+
+        return new OkResponse<bool>(true);
+    }
+}
+```
+
+> O `CommaSeparatedRolesClaimsAuthorizer` também suporta **dynamic claims** — valores extraídos de segmentos da URL (ex: `{accountId}`) para validação de ownership no nível do Gateway.
+
+Registro no `Program.cs` do Gateway:
+
+```csharp
+builder.Services.AddSingleton<IClaimsAuthorizer, CommaSeparatedRolesClaimsAuthorizer>();
+```
+
+---
+
 ## Configuração do Ocelot (`ocelot.json`)
 
 Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar corretamente:
@@ -182,23 +234,55 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer("Bearer", options =>
     {
-        options.Authority = "http://keycloak:8080/realms/cashflow";
-        options.Audience  = "cashflow-api";
+        options.Authority = authority; // lido de Keycloak:Authority no appsettings.json
         options.RequireHttpsMetadata = false; // apenas em desenvolvimento
 
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateIssuer           = true,
-            ValidIssuer              = "http://keycloak:8080/realms/cashflow",
-            ValidateAudience         = true,
-            ValidAudience            = "cashflow-api",
-            ValidateLifetime         = true,
-            ClockSkew                = TimeSpan.FromSeconds(30),
-            ValidateIssuerSigningKey = true,
-            // Chave pública obtida automaticamente via JWKS endpoint do Keycloak
+            ValidateAudience = true,
+            ValidateIssuer   = true,
+            // Valida múltiplas audiences: cashflow-api, dashboard-api, account
+            AudienceValidator = (audiences, _, _) =>
+            {
+                var list = audiences?.ToList() ?? [];
+                return list.Exists(validAudiences.Contains);
+            },
+            // Suporta múltiplos issuers (localhost, 127.0.0.1, keycloak — dev/prod)
+            ValidIssuers = validIssuers,
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                // Chama explicitamente o claims transformer (Ocelot não passa pelo pipeline padrão)
+                var transformation = context.HttpContext.RequestServices
+                    .GetRequiredService<IClaimsTransformation>();
+                context.Principal = await transformation.TransformAsync(context.Principal!);
+            },
         };
     });
 ```
+
+As audiences e issuers são configuradas no `appsettings.json` do Gateway:
+
+```json
+{
+  "Keycloak": {
+    "Authority": "http://localhost:8080/realms/cashflow",
+    "RequireHttpsMetadata": false,
+    "ValidAudiences": [ "cashflow-api", "dashboard-api", "account" ],
+    "ValidIssuers": [
+      "http://localhost:8080/realms/cashflow",
+      "http://keycloak:8080/realms/cashflow"
+    ]
+  }
+}
+```
+
+> **Por que múltiplas audiences?** O Keycloak inclui `"account"` (client de gerenciamento de conta) no campo `aud` por padrão. O validator customizado aceita o token se pelo menos uma das audiences listadas estiver presente — comportamento mais flexível que `ValidAudience` simples.
+
+> **Por que chamar o transformer em `OnTokenValidated`?** O middleware do Ocelot executa fora do pipeline de autenticação padrão do ASP.NET Core, de modo que o `IClaimsTransformation` não é invocado automaticamente. A chamada explícita no evento garante que as roles de `realm_access` estejam disponíveis no `ClaimsPrincipal` antes de o `CommaSeparatedRolesClaimsAuthorizer` verificar o `RouteClaimsRequirement`.
 
 O Keycloak disponibiliza as chaves públicas em:
 ```
@@ -211,21 +295,20 @@ O ASP.NET Core busca e rotaciona essas chaves automaticamente, sem necessidade d
 
 ## Divisão de responsabilidades de segurança
 
-> Diagrama de sequência do fluxo RBAC completo: [`diagrams/authz-rbac-flow.mmd`](./diagrams/authz-rbac-flow.mmd)
-
 ```mermaid
 flowchart TD
     A[Angular SPA\nBearer JWT] --> G[Ocelot Gateway]
     G --> V1[Valida assinatura JWT\nvia JWKS do Keycloak]
     V1 --> V2[Valida issuer, audience\ne expiração]
     V2 --> V3[KeycloakRolesClaimsTransformation\nrealm_access.roles → claim roles]
-    V3 --> V4{RouteClaimsRequirement\nrole autorizada?}
-    V4 -- Sim --> C[CashFlow API ou Dashboard API\nrecebe requisição já autorizada]
-    V4 -- Não --> E[403 Forbidden\nrequisição bloqueada no Gateway]
+    V3 --> V4[CommaSeparatedRolesClaimsAuthorizer\nverifica RouteClaimsRequirement]
+    V4 --> V5{role autorizada?}
+    V5 -- Sim --> C[CashFlow API ou Dashboard API\nrecebe requisição já autorizada]
+    V5 -- Não --> E[403 Forbidden\nrequisição bloqueada no Gateway]
     C --> B[Lógica de negócio pura\nsem camada de autorização por role na API]
 ```
 
-> **Claims no gateway:** a transformação registra valores no claim textual `"roles"` (valor simples por role), que o `RouteClaimsRequirement` do Ocelot espera ao validar políticas por rota.
+> **Claims no gateway:** a transformação registra valores no claim textual `"roles"` (valor simples por role). O `CommaSeparatedRolesClaimsAuthorizer` interpreta o valor do `RouteClaimsRequirement` como lista de alternativas separadas por vírgula, autorizando se o usuário possuir **ao menos uma** das roles listadas.
 
 ### Defense in depth: autenticação na API downstream
 

@@ -88,30 +88,33 @@ Quando o limite é excedido, o gateway responde com **429** e os headers configu
 
 ### Configuração no Ocelot / ASP.NET Core
 
-CORS é configurado no Gateway para permitir apenas origens conhecidas:
+CORS é configurado no Gateway para permitir apenas origens conhecidas. As origens são lidas de `appsettings.json` (`Cors:AllowedOrigins`), sem hardcoding no código:
 
 ```csharp
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    options.AddDefaultPolicy(policy =>
     {
-        policy
-            .WithOrigins(
-                "http://localhost:4200",     // desenvolvimento local
-                "https://app.empresa.com"   // produção
-            )
-            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-            .WithHeaders("Authorization", "Content-Type", "Accept")
-            .AllowCredentials();
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? ["http://localhost:4200"];
+        policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
     });
 });
 
-app.UseCors("AllowFrontend");
+app.UseCors();
 ```
 
-### Por que não usar `AllowAnyOrigin()`
+Configuração no `appsettings.json`:
 
-Usar `*` (qualquer origem) em combinação com `AllowCredentials()` é explicitamente proibido pelo padrão CORS e o ASP.NET Core lança exceção. Além disso, permitir qualquer origem possibilitaria ataques CSRF onde sites maliciosos fazem requisições autenticadas em nome do usuário.
+```json
+{
+  "Cors": {
+    "AllowedOrigins": [ "http://localhost:4200" ]
+  }
+}
+```
+
+Em produção, adicione as origens reais (ex: `https://app.empresa.com`) diretamente no `appsettings.json` de produção ou via variável de ambiente.
 
 ---
 
@@ -181,29 +184,16 @@ O Keycloak por padrão não revela se um email existe na base em respostas de er
 
 ### Exposição de informações sensíveis em erros
 
-As APIs retornam apenas mensagens de erro genéricas em produção. Stack traces, queries SQL e detalhes internos nunca são expostos nas respostas da API:
-
-```csharp
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        context.Response.StatusCode = 500;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new
-        {
-            error = "Ocorreu um erro interno. Por favor, tente novamente."
-            // sem stack trace, sem mensagem original da exceção
-        });
-    });
-});
-```
+As APIs retornam apenas mensagens de erro genéricas em produção. Stack traces, queries SQL e detalhes internos nunca são expostos nas respostas da API. Isso é implementado via `ExceptionMiddleware` customizado em cada serviço (`app.UseMiddleware<ExceptionMiddleware>()`), que captura exceções não tratadas e retorna uma resposta genérica com status 500 sem vazar detalhes internos.
 
 ### Headers de segurança HTTP
 
-O Gateway adiciona os seguintes headers de segurança em todas as respostas:
+> **Status:** não implementado no Gateway atual — recomendado para produção.
+
+O Load Balancer / Reverse Proxy (NGINX, AWS ALB, Azure Application Gateway) que termina o TLS é o local recomendado para adicionar headers de segurança HTTP em produção. Alternativamente, um middleware ASP.NET Core pode ser adicionado ao Gateway:
 
 ```csharp
+// Recomendado — adicionar ao Program.cs do Gateway antes de UseOcelot()
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"]    = "nosniff";

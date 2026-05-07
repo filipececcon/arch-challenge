@@ -14,15 +14,79 @@ O sistema lida com dados financeiros sensíveis — valores de transações, sal
 
 ### Arquitetura de TLS
 
-> Diagrama completo da arquitetura de rede e TLS: [`diagrams/tls-architecture.mmd`](./diagrams/tls-architecture.mmd)
-
 ```mermaid
 flowchart TD
-    U["👤 Usuário"] -->|"HTTPS — TLS 1.2+"| LB["Load Balancer\nTLS Termination"]
-    LB -->|"HTTP — rede privada"| GW["Ocelot Gateway"]
-    GW -->|"HTTP — rede Docker interna"| CF["CashFlow API"]
-    GW -->|"HTTP — rede Docker interna"| DB["Dashboard API"]
-    CF & DB -->|"TCP — sslmode=require¹"| PG[("PostgreSQL")]
+    subgraph internet["🌐 Internet (tráfego externo)"]
+        U[("👤 Usuário<br/>(Browser / Cliente)")]
+        OPS[("🔧 Operador / Dev")]
+    end
+
+    subgraph vpn["🔐 VPN — acesso operacional obrigatório"]
+        VPN_GW["VPN Gateway<br/>(WireGuard / Tailscale / OpenVPN)<br/>CIDR: &lt;vpn-cidr&gt;"]
+    end
+
+    subgraph perimeter["Perímetro — TLS Termination"]
+        LB["Load Balancer / Reverse Proxy<br/>nginx | AWS ALB | Azure App Gateway<br/>🔒 TLS 1.2+ obrigatório<br/>📜 Certificado Let's Encrypt ou CA corporativa<br/>🛡️ HSTS: max-age=31536000; includeSubDomains"]
+    end
+
+    subgraph docker["Rede Interna — cashflow-network (HTTP)"]
+        direction TB
+        GW["Ocelot API Gateway<br/>:5000<br/>• Rate Limiting<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement"]
+
+        subgraph services["Serviços de Negócio (não expostos externamente)"]
+            CF["CashFlow API<br/>:8080"]
+            DB["Dashboard API<br/>:8080"]
+        end
+
+        subgraph infra["Infraestrutura (não exposta externamente)"]
+            PG[("PostgreSQL<br/>:5432")]
+            RB[("RabbitMQ<br/>:5672")]
+            KC["Keycloak<br/>:8080"]
+            ES[("Elasticsearch<br/>:9200")]
+        end
+
+        GW -->|HTTP interno| CF
+        GW -->|HTTP interno| DB
+        GW -->|HTTP interno — JWKS| KC
+        CF -->|"TCP — sslmode=require¹"| PG
+        DB -->|"TCP — sslmode=require¹"| PG
+        CF -->|AMQP| RB
+        DB -->|AMQP| RB
+        KC -->|"TCP — sslmode=require¹"| PG
+    end
+
+    subgraph obs["Observabilidade — acesso restrito à VPN"]
+        FB["Fluent Bit"]
+        APM["Elastic APM Server<br/>:8200"]
+        KB["Kibana<br/>:5601<br/>🔐 VPN only"]
+        PR["Prometheus<br/>:9090<br/>🔐 VPN only"]
+        GF["Grafana<br/>:3000<br/>🔐 VPN only"]
+        RBMQ_MGT["RabbitMQ Management<br/>:15672<br/>🔐 VPN only"]
+
+        CF & DB & GW -.->|stdout JSON| FB
+        CF & DB & GW -.->|traces OTLP| APM
+        FB -.->|HTTP| ES
+        APM -->|HTTP| ES
+        CF & DB & GW -->|scrape /metrics| PR
+        PR -->|dados| GF
+        ES --> KB
+    end
+
+    U -->|"HTTPS — TLS 1.2+ / HSTS ativo"| LB
+    LB -->|"HTTP (rede privada)"| GW
+    OPS -->|"túnel VPN autenticado"| VPN_GW
+    VPN_GW -->|"NetworkPolicy: ipBlock &lt;vpn-cidr&gt;"| GF
+    VPN_GW -->|"NetworkPolicy: ipBlock &lt;vpn-cidr&gt;"| KB
+    VPN_GW -->|"NetworkPolicy: ipBlock &lt;vpn-cidr&gt;"| PR
+    VPN_GW -->|"NetworkPolicy: ipBlock &lt;vpn-cidr&gt;"| RBMQ_MGT
+
+    style internet fill:#fcd34d,stroke:#92400e
+    style vpn fill:#f87171,stroke:#991b1b
+    style perimeter fill:#60a5fa,stroke:#1e40af
+    style docker fill:#4ade80,stroke:#166534
+    style obs fill:#c084fc,stroke:#6b21a8
+    style services fill:#34d399,stroke:#065f46
+    style infra fill:#34d399,stroke:#065f46
 ```
 
 > ¹ `sslmode=require` recomendado para produção. Em desenvolvimento local usa-se `sslmode=disable` por conveniência.
