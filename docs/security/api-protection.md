@@ -10,7 +10,7 @@ graph TD
     Internet --> GW
 
     subgraph GW_ZONE["ÚNICO ponto de entrada externo (produção)"]
-        GW["Ocelot Gateway :5000<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement"]
+        GW["Ocelot Gateway :5000<br/>• CORS<br/>• JWT Validation<br/>• RouteClaimsRequirement<br/>• Rate limiting (por rota)"]
     end
 
     GW -->|"rede Docker interna"| CF["CashFlow API :8080<br/>(porta 5001 exposta apenas em dev)"]
@@ -28,11 +28,11 @@ Sem rate limiting, um atacante pode:
 - Causar **DoS (Denial of Service)** sobrecarregando os serviços com requisições legítimas falsas
 - **Enumerar dados** fazendo milhares de requisições para coletar informações
 
-### Status atual
+### Configuração atual (`ocelot.json`)
 
-> **Nota:** O rate limiting via `RateLimitOptions` do Ocelot está **planejado mas ainda não implementado** no `ocelot.json` atual. A configuração abaixo documenta o design pretendido a ser adicionado.
+O rate limiting está **ativo** nas rotas do gateway (`EnableRateLimiting: true`). A janela é **por minuto** (`Period: "1m"`), não por segundo — valores distintos de um sketch antigo por segundo no mesmo documento.
 
-O Ocelot possui suporte nativo a rate limiting por rota:
+Exemplo espelhado do repositório:
 
 ```json
 {
@@ -42,9 +42,9 @@ O Ocelot possui suporte nativo a rate limiting por rota:
       "RateLimitOptions": {
         "ClientWhitelist": [],
         "EnableRateLimiting": true,
-        "Period": "1s",
-        "PeriodTimespan": 1,
-        "Limit": 10
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
       }
     },
     {
@@ -52,43 +52,35 @@ O Ocelot possui suporte nativo a rate limiting por rota:
       "RateLimitOptions": {
         "ClientWhitelist": [],
         "EnableRateLimiting": true,
-        "Period": "1s",
-        "PeriodTimespan": 1,
-        "Limit": 60
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 30
       }
     }
   ],
   "GlobalConfiguration": {
     "RateLimitOptions": {
       "DisableRateLimitHeaders": false,
-      "QuotaExceededMessage": "Limite de requisições excedido. Tente novamente em alguns instantes.",
+      "QuotaExceededMessage": "Too Many Requests — limite de requisições atingido. Tente novamente em instantes.",
       "HttpStatusCode": 429,
-      "ClientIdHeader": "ClientId"
+      "ClientIdHeader": "X-ClientId"
     }
   }
 }
 ```
 
-### Limites planejados por contexto
+### Limites por contexto
 
-| Rota | Limite | Janela | Justificativa |
+| Rota | Limite | Janela | Observação |
 |---|---|---|---|
-| `/cashflow/v1/**` | 10 req | 1 segundo | Operações de escrita de lançamentos — frequência razoável para uso humano |
-| `/dashboard/v1/**` | 60 req | 1 segundo | Requisito não funcional: suportar 50 req/s com até 5% de perda |
+| `/cashflow/v1/**` | 60 requisições | 1 minuto | Cobre escritas de lançamento e demais operações sob o mesmo prefixo |
+| `/dashboard/v1/**` | 30 requisições | 1 minuto | Proteção por borda distinta da rota Cashflow |
 
-> **Nota sobre o requisito não funcional do Dashboard:** O limite de 60 req/s no Gateway dá margem ao requisito de 50 req/s, com folga para lidar com picos pontuais. O RabbitMQ atua como buffer de carga adicional para o processamento assíncrono.
+O requisito de **aproximadamente 50 req/s** para o consolidado refere-se sobretudo à **capacidade do serviço Dashboard** e da leitura; o limite atual do gateway está em **janelas de um minuto** e pode ser afinado independentemente sem alterar a API downstream. O RabbitMQ continua amortecendo picos no fluxo assíncrono relacionado ao Cashflow.
 
-### Headers de resposta (quando implementado)
+### Headers de resposta
 
-Quando o rate limit é aplicado, o Gateway retornará:
-
-```
-HTTP/1.1 429 Too Many Requests
-X-Rate-Limit-Limit: 10
-X-Rate-Limit-Remaining: 0
-X-Rate-Limit-Reset: 1
-Retry-After: 1
-```
+Quando o limite é excedido, o gateway responde com **429** e os headers configurados pelo Ocelot (`X-Rate-Limit-*`, `Retry-After` conforme o pacote versão/implementação), alinhados ao `QuotaExceededMessage` global.
 
 ---
 
@@ -108,7 +100,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:4200",     // desenvolvimento local
                 "https://app.empresa.com"   // produção
             )
-            .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             .WithHeaders("Authorization", "Content-Type", "Accept")
             .AllowCredentials();
     });

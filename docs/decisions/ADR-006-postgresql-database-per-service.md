@@ -31,7 +31,7 @@ Utilizar **PostgreSQL** como banco de dados relacional para ambos os serviços, 
 
 | Serviço | Banco | Schemas | Principais tabelas |
 |---|---|---|---|
-| CashFlow | `cashflow_db` | `public`, `outbox`, `control` | `TB_TRANSACTION`, `TB_OUTBOX_EVENT`, `TB_OUTBOX_AUDIT_EVENT`, `__EFMigrationsHistory` |
+| CashFlow | `cashflow_db` | `public`, `outbox`, `control` | `TB_ACCOUNT`, `TB_TRANSACTION`, `TB_OUTBOX`, `__EFMigrationsHistory` |
 | Dashboard | `dashboard_db` | `public` | `daily_consolidations`, `processed_integration_events` |
 
 O banco `cashflow_db` utiliza schemas separados por responsabilidade para permitir controle de acesso granular por role — detalhado em [ADR-015 — Segregação de Schemas PostgreSQL](./ADR-015-segregacao-schemas-postgresql.md).

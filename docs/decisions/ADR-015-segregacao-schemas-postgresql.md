@@ -12,8 +12,8 @@ O banco de dados `cashflow_db` hospeda três categorias distintas de objetos com
 
 | Categoria | Exemplos | Quem precisa de acesso |
 |-----------|----------|------------------------|
-| Dados de domínio | `TB_TRANSACTION` | API, workers de outbox (leitura) |
-| Outbox transacional | `TB_OUTBOX_EVENT`, `TB_OUTBOX_AUDIT_EVENT` | Workers de outbox (leitura/escrita), API (somente escrita dentro da transação) |
+| Dados de domínio | `TB_ACCOUNT`, `TB_TRANSACTION` | API, workers de outbox (leitura) |
+| Outbox transacional | `TB_OUTBOX` | Workers de outbox (leitura/escrita), API (somente escrita dentro da transação) |
 | Metadados de infraestrutura EF | `__EFMigrationsHistory` | Role de deploy/migrations exclusivamente |
 
 Manter todos os objetos no schema `public` elimina a possibilidade de conceder privilégios granulares por perfil de role, expondo objetos sensíveis (como o histórico de migrations) a roles que não deveriam interagir com eles.
@@ -34,12 +34,12 @@ Adotar **três schemas** no banco `cashflow_db`, cada um com um role dedicado e 
 flowchart TB
     subgraph cashflow_db
         subgraph public["schema: public"]
+            TB_ACCOUNT["TB_ACCOUNT"]
             TB_TRANSACTION["TB_TRANSACTION"]
         end
 
         subgraph outbox["schema: outbox"]
-            TB_OUTBOX_EVENT["TB_OUTBOX_EVENT"]
-            TB_OUTBOX_AUDIT_EVENT["TB_OUTBOX_AUDIT_EVENT"]
+            TB_OUTBOX["TB_OUTBOX\n(DS_TARGET: Mongo | Audit | Events)"]
         end
 
         subgraph control["schema: control"]
@@ -52,11 +52,9 @@ flowchart TB
     role_deploy["role: cashflow_deploy\n(Pipeline de Deploy)"]
 
     role_api -->|"INSERT, SELECT, UPDATE\nem public"| TB_TRANSACTION
-    role_api -->|"INSERT\nem outbox (dentro da transação)"| TB_OUTBOX_EVENT
-    role_api -->|"INSERT\nem outbox (dentro da transação)"| TB_OUTBOX_AUDIT_EVENT
+    role_api -->|"INSERT\nem outbox (dentro da transação)"| TB_OUTBOX
 
-    role_outbox -->|"SELECT, UPDATE\nem outbox"| TB_OUTBOX_EVENT
-    role_outbox -->|"SELECT, UPDATE\nem outbox"| TB_OUTBOX_AUDIT_EVENT
+    role_outbox -->|"SELECT, UPDATE\nem outbox"| TB_OUTBOX
 
     role_deploy -->|"INSERT, SELECT, UPDATE, DELETE\nem control"| EF_HISTORY
     role_deploy -->|"CREATE, ALTER, DROP\nem public e outbox"| TB_TRANSACTION
@@ -80,14 +78,11 @@ options.UseNpgsql(
     npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "control"));
 ```
 
-As entidades de outbox são mapeadas explicitamente para o schema `outbox` nas configurations do EF:
+As entidades de outbox são mapeadas explicitamente para o schema `outbox` na configuration do EF:
 
 ```csharp
-// OutboxEventConfiguration
-builder.ToTable("TB_OUTBOX_EVENT", schema: "outbox");
-
-// AuditOutboxEventConfiguration
-builder.ToTable("TB_OUTBOX_AUDIT_EVENT", schema: "outbox");
+// OutboxConfiguration
+builder.ToTable("TB_OUTBOX", schema: "outbox");
 ```
 
 ### Exemplo de grants por role (referência)

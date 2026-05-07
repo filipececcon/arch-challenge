@@ -6,7 +6,7 @@ namespace ArchChallenge.CashFlow.Infrastructure.CrossCutting.Messaging.Channels;
 /// Canal de comando: recebe a solicitação de criação de transação e a entrega ao worker assíncrono.
 ///
 /// Fluxo:
-///   POST /transactions → EnqueueTransactionMessage publicada neste exchange
+///   POST /api/accounts/{accountId}/transactions → EnqueueTransactionMessage publicada neste exchange
 ///   → ExecuteTransactionConsumer lê da fila deste canal e executa o comando de negócio.
 ///
 /// Exchange e fila compartilham o mesmo nome. Como o nome é personalizado (não FQN),

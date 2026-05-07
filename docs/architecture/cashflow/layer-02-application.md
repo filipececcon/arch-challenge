@@ -8,11 +8,11 @@ O projeto **ArchChallenge.CashFlow.Application** concentra os **casos de uso** d
 
 A camada Application adota **CQRS leve** com **MediatR**: comandos e consultas são representados por `IRequest` / `IRequest<TResponse>`, cada um com um handler dedicado. Isso mantém os fluxos explícitos e testáveis sem impor um framework de CQRS completo.
 
-O **enqueue** de transações é tratado por um **handler genérico** (`EnqueueCommandHandler<TCommand, TMessage>`), reutilizável para qualquer comando que implemente `IEnqueueCommand<TMessage>`. Assim, a lógica de **geração de `taskId`**, marcação de tarefa como pendente no cache, **publicação no broker** e registro de **idempotência** fica centralizada.
+O **enqueue** de transações combina dois pontos no MediatR: o **`EnqueueBehavior<TCommand, TResponse>`** (`IPipelineBehavior`), que centraliza **idempotência**, **geração/injeção do `taskId`**, marcação **`Pending`** no **`ITaskCacheService`** antes do handler e vínculo chave→`taskId` após sucesso; e o **`EnqueueTransactionCommandHandler`**, que apenas **`BuildMessage()`** e **`IEventBus.PublishAsync`** (sem Unit of Work/outbox neste fluxo).
 
-A **validação** de entrada é aplicada de forma transversal pelo **`ValidationBehavior`**, um `IPipelineBehavior` que executa todos os `IValidator<TRequest>` registrados (FluentValidation) **antes** do handler correspondente, lançando `ValidationException` quando há falhas. Os validators podem usar **`IStringLocalizer<Messages>`** e **`MessageKeys`** para mensagens nos recursos `.resx` — ver [layer-10-i18n.md](./layer-10-i18n.md).
+A **validação** de entrada é aplicada de forma transversal pelo **`ValidationBehavior`**, um `IPipelineBehavior` que executa todos os `IValidator<TRequest>` registrados (FluentValidation) **antes** do pipeline seguir até o comportamento de enqueue e o handler, lançando `ValidationException` quando há falhas. Os validators podem usar **`IStringLocalizer<Messages>`** e **`MessageKeys`** para mensagens nos recursos `.resx` — ver [layer-10-i18n.md](./layer-10-i18n.md).
 
-A **auditoria** é aplicada pelo **`AuditBehavior`**, um segundo `IPipelineBehavior` que, para comandos que implementem `IAuditable`, define os metadados de contexto (`UserId`, `OccurredAt`) no `IAuditContext` scoped **antes** do handler executar. A materialização do registro de auditoria ocorre na `UnitOfWork`, dentro da mesma transação PostgreSQL que persiste o agregado. O detalhamento completo do mecanismo está em [layer-09-immutable.md](./layer-09-immutable.md).
+Comandos **`IAuditable`** recebem **`UserId`** e **`OccurredAt`** no pipeline antes do handler através do **`IdentityBehavior`** (e, na borda HTTP, do **`IdentityCommandFilter`** quando aplicável — ver [layer-08-security.md](./layer-08-security.md)). Persistência da auditoria imutável, outboxes e **ImmuDB** seguem o desenho de [layer-09-immutable.md](./layer-09-immutable.md).
 
 O **tratamento de idempotência** no enqueue combina a chave opcional `IEnqueueCommand.IdempotencyKey` com **`ITaskCacheService`**: requisições repetidas com a mesma chave recebem o mesmo `taskId` já associado, dentro da janela de TTL configurada (por exemplo, **24 horas**).
 
@@ -24,11 +24,11 @@ As **consultas** exploram **leitura híbrida** quando necessário: em especial, 
 
 | Padrão | Implementação |
 |--------|---------------|
-| CQRS (Command/Query Separation) | Commands: `EnqueueTransaction`, `ExecuteTransaction`; Queries: `GetAllTransactionsQuery`, `GetTransactionByIdQuery` |
+| CQRS (Command/Query Separation) | Commands: `EnqueueTransactionCommand`, `ExecuteTransactionCommand`; Queries: `GetAllTransactionsQuery`, `GetTransactionByIdQuery` |
 | Pipeline Behavior (validação) | `ValidationBehavior<TRequest,TResponse>` — validação automática via FluentValidation antes de cada handler |
-| Pipeline Behavior (auditoria) | `AuditBehavior<TRequest,TResponse>` — define metadados no `IAuditContext` para comandos que implementam `IAuditable` |
-| Generic Enqueue Handler | `EnqueueCommandHandler<TCommand,TMessage>` — reutilizável para qualquer command que implemente `IEnqueueCommand<TMessage>` |
-| Publicação pós-commit | `CommandHandlerBase` publica diretamente no `IEventBus` via callback `AfterCommit` após o commit |
+| Pipeline Behavior (identidade em comandos `IAuditable`) | `IdentityBehavior<TRequest,TResponse>` — preenche `UserId` e `OccurredAt` quando vierem vazios (ex.: comandos vindos só do RabbitMQ já preenchidos na mensagem) |
+| Pipeline Behavior (enqueue: taskId, cache, idempotência) | `EnqueueBehavior<TCommand,TResponse>` — executa antes do handler para comandos `IEnqueueCommand<TResponse>` |
+| Publicação assíncrona (integração) | Entradas em `IOutboxContext` + `OutboxBehavior`; `EventsOutboxWorkerService` publica `TransactionRegisteredIntegrationEvent` via `IEventBus` |
 | Idempotência | `IEnqueueCommand.IdempotencyKey` + `ITaskCacheService` com TTL 24h |
 | Leitura Híbrida | `GetTransactionByIdHandler`: Mongo → Outbox pendente → Relacional |
 
@@ -40,27 +40,70 @@ As **consultas** exploram **leitura híbrida** quando necessário: em especial, 
 classDiagram
   direction TB
 
-  class CommandBase {
+  class EnqueueCommand~TResponse~ {
     <<abstract record>>
-    note: Application.Common.Commands\nIAuditable; IRequest declarado em cada comando
+    +string UserId
+    +DateTime OccurredAt
+    +Guid IdempotencyKey
+    +Guid TaskId
+  }
+
+  class IEnqueueCommand~TResponse~ {
+    <<interface>>
+    +Guid? IdempotencyKey
+    +Guid TaskId
+  }
+
+  class TrackedCommand~TResponse~ {
+    <<abstract record>>
+    +Guid TaskId
     +string UserId
     +DateTime OccurredAt
   }
 
-  class IEnqueueCommand~TMessage~ {
-    +Guid? IdempotencyKey
-    +BuildMessage(Guid taskId) TMessage
-  }
-
-  class EnqueueTransaction {
+  class EnqueueTransactionCommand {
     +TransactionType Type
     +decimal Amount
     +string? Description
     +Guid? IdempotencyKey
-    +BuildMessage(Guid taskId) EnqueueTransactionMessage
+    +BuildMessage() EnqueueTransactionMessage
   }
 
-  class EnqueueCommandHandler~TCommand,TMessage~ {
+  class ExecuteTransactionCommand {
+    <<record>>
+    +TransactionType Type
+    +decimal Amount
+    +string? Description
+  }
+
+  class EnqueueBehavior~TCommand,TResponse~ {
+    <<sealed>>
+    idempotencia + TaskId + cache Pending
+  }
+
+  class EnqueueTransactionCommandHandler {
+    <<sealed>>
+    BuildMessage() + IEventBus.PublishAsync
+  }
+
+  class ExecuteTransactionCommandHandler {
+    <<sealed>>
+    ValidateBusiness + AddTransaction + outboxes
+  }
+
+  class CreateAccountCommandHandler {
+    <<sealed>>
+    verifica duplicidade + AddAsync + outboxes
+  }
+
+  class GetAllTransactionsHandler {
+  }
+
+  class GetTransactionByIdHandler {
+    leitura hibrida: Mongo to Outbox to Relacional
+  }
+
+  class ValidationBehavior~TRequest,TResponse~ {
     <<sealed>>
   }
 
@@ -72,18 +115,18 @@ classDiagram
     <<interface>>
   }
 
-  class ValidationBehavior~TRequest,TResponse~ {
-  }
-
-  class ExecuteTransactionHandler {
-    <<sealed>>
-  }
-
-  class IWriteRepository~TEntity~ {
+  class IOutboxContext {
     <<interface>>
+    +AddAudit(eventName, payload)
+    +AddMongo(eventName, payload)
+    +AddEvent(eventName, payload)
   }
 
   class IOutboxRepository {
+    <<interface>>
+  }
+
+  class IWriteRepository~TEntity~ {
     <<interface>>
   }
 
@@ -99,52 +142,44 @@ classDiagram
     <<interface>>
   }
 
-  class GetAllTransactionsHandler {
-  }
-
   class IDocumentsReadRepository~TDocument~ {
     <<interface>>
-  }
-
-  class GetTransactionByIdHandler {
   }
 
   class IReadRepository~TEntity~ {
     <<interface>>
   }
 
-  CommandBase <|-- EnqueueTransaction : herda
-  CommandBase <|-- ExecuteTransaction : herda
-  IEnqueueCommand~TMessage~ <|.. EnqueueTransaction : implementa
-  IRequestHandler~TRequest,TResponse~ <|.. EnqueueCommandHandler~TCommand,TMessage~ : implementa
-  IRequestHandler~TRequest,TResponse~ <|.. ExecuteTransactionHandler : implementa
+  EnqueueTransactionCommand --|> EnqueueCommand~TResponse~ : herda
+  ExecuteTransactionCommand --|> TrackedCommand~TResponse~ : herda
+  IEnqueueCommand~TResponse~ <|.. EnqueueCommand~TResponse~ : implementa
+  IPipelineBehavior~TRequest,TResponse~ <|.. EnqueueBehavior~TCommand,TResponse~ : implementa
   IPipelineBehavior~TRequest,TResponse~ <|.. ValidationBehavior~TRequest,TResponse~ : implementa
+  IRequestHandler~TRequest,TResponse~ <|.. EnqueueTransactionCommandHandler : implementa
+  IRequestHandler~TRequest,TResponse~ <|.. ExecuteTransactionCommandHandler : implementa
+  IRequestHandler~TRequest,TResponse~ <|.. CreateAccountCommandHandler : implementa
 
-  note for EnqueueCommandHandler~TCommand,TMessage~
-    Especialização: TResponse = EnqueueResult.
-  end note
+  EnqueueTransactionCommandHandler ..> IEventBus : PublishAsync
+  EnqueueTransactionCommandHandler ..> ITaskCacheService : usa via EnqueueBehavior
 
-  note for ExecuteTransactionHandler
-    Especialização: TRequest = ExecuteTransaction; TResponse = Unit (MediatR).
-  end note
+  ExecuteTransactionCommandHandler ..> IReadRepository~TEntity~ : carrega Account
+  ExecuteTransactionCommandHandler ..> IOutboxContext : registra outboxes
 
-  ExecuteTransactionHandler ..> IWriteRepository~Transaction~ : usa
-  ExecuteTransactionHandler ..> IOutboxRepository : usa
-  ExecuteTransactionHandler ..> IEventBus : usa (via CommandHandlerBase AfterCommit)
-  ExecuteTransactionHandler ..> IUnitOfWork : usa
-  ExecuteTransactionHandler ..> ITaskCacheService : usa
-  ExecuteTransactionHandler ..> IAuditContext : usa
+  CreateAccountCommandHandler ..> IReadRepository~TEntity~ : verifica duplicidade
+  CreateAccountCommandHandler ..> IWriteRepository~TEntity~ : AddAsync nova conta
+  CreateAccountCommandHandler ..> IOutboxContext : registra outboxes
 
-  GetAllTransactionsHandler ..> IDocumentsReadRepository~TransactionDocument~ : usa
+  GetAllTransactionsHandler ..> IDocumentsReadRepository~TDocument~ : ListAsync
+  GetAllTransactionsHandler ..> IReadRepository~TEntity~ : verifica conta
 
-  GetTransactionByIdHandler ..> IDocumentsReadRepository~TransactionDocument~ : usa
-  GetTransactionByIdHandler ..> IReadRepository~Transaction~ : usa
-  GetTransactionByIdHandler ..> IOutboxRepository : usa
+  GetTransactionByIdHandler ..> IDocumentsReadRepository~TDocument~ : FindOneByIdAsync
+  GetTransactionByIdHandler ..> IReadRepository~TEntity~ : verifica conta + fallback
+  GetTransactionByIdHandler ..> IOutboxRepository : HasPendingForAggregateAsync
 ```
 
 ---
 
-## Diagrama de Sequência — EnqueueTransaction
+## Diagrama de Sequência — EnqueueTransactionCommand
 
 Fluxo completo do enqueue: verificação de idempotência, registro da tarefa como pendente, montagem da mensagem, publicação no broker e amarração chave de idempotência ao `taskId`.
 
@@ -154,75 +189,77 @@ sequenceDiagram
   participant Cliente
   participant Mediator as IMediator
   participant VB as ValidationBehavior
-  participant V as IValidator~EnqueueTransaction~
-  participant H as EnqueueCommandHandler
+  participant V as IValidator~EnqueueTransactionCommand~
+  participant EB as EnqueueBehavior
+  participant H as EnqueueTransactionCommandHandler
   participant Cache as ITaskCacheService
   participant Bus as IEventBus
   participant Broker as Message broker
 
-  Cliente->>Mediator: Send(EnqueueTransaction)
+  Cliente->>Mediator: Send(EnqueueTransactionCommand)
   Mediator->>VB: Handle (pipeline)
   VB->>V: ValidateAsync(command)
   V-->>VB: valid / failures
   alt falhas de validação
     VB-->>Cliente: ValidationException
   end
-  VB->>H: Handle(command)
+  VB->>EB: seguinte comportamento até EnqueueBehavior
 
-  H->>Cache: GetIdempotencyAsync(idempotencyKey)
+  EB->>Cache: GetIdempotencyAsync(idempotencyKey?)
   alt chave já utilizada
-    Cache-->>H: taskId existente
-    H-->>Cliente: EnqueueResult(taskId)
+    Cache-->>EB: taskId existente
+    EB-->>Cliente: Result Ok EnqueueTransactionResult(taskId), 202
   end
 
-  H->>H: novo taskId (Guid)
-  H->>Cache: SetPendingAsync(taskId)
-  H->>H: message = BuildMessage(taskId)
-  H->>Bus: PublishAsync(message)
-  Bus->>Broker: mensagem publicada
-  H->>Cache: SetIdempotencyAsync(idempotencyKey, taskId)
-  H-->>Cliente: EnqueueResult(taskId)
+  EB->>EB: TaskId novo e injetado no command
+  EB->>Cache: SetPendingAsync(taskId)
+  EB->>H: next() → Handle(command)
+  H->>Bus: PublishAsync(BuildMessage())
+  Bus->>Broker: exchange cashflow.transaction.create
+  H-->>EB: Result Ok EnqueueTransactionResult(taskId), 202
+  EB->>Cache: SetIdempotencyAsync(idempotencyKey?, taskId) se aplicável
+  EB-->>Cliente: Result Ok EnqueueTransactionResult(taskId), 202
 ```
 
 ---
 
-## Diagrama de Sequência — ExecuteTransaction
+## Diagrama de Sequência — `ExecuteTransactionCommand`
 
-Persistência transacional com **outbox**, atualização do cache de tarefa em sucesso e publicação do evento no broker via `IEventBus` (callback `AfterCommit` de `CommandHandlerBase`).
+Persistência transacional com **outbox** (`IOutboxContext` + `OutboxBehavior` + `UnitOfWorkBehavior`), atualização do cache de tarefa após sucesso e **publicação assíncrona** dos eventos de integração pelo **`EventsOutboxWorkerService`** (lê outbox → `IEventBus` → RabbitMQ).
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Consumer as Consumer MassTransit
+  participant Consumer as ExecuteTransactionConsumer
   participant Mediator as IMediator
-  participant H as ExecuteTransactionHandler
-  participant UoW as IUnitOfWork
-  participant WR as IWriteRepository~Transaction~
+  participant H as ExecuteTransactionCommandHandler
+  participant Read as IReadRepository
+  participant WR as IWriteRepository
+  participant Ctx as IOutboxContext
   participant OB as IOutboxRepository
+  participant UoW as IUnitOfWork
   participant Cache as ITaskCacheService
-  participant Bus as IEventBus
 
-  Consumer->>Mediator: Send(ExecuteTransaction)
+  Consumer->>Mediator: Send(ExecuteTransactionCommand)
   Mediator->>H: Handle(command)
 
-  H->>UoW: BeginTransactionAsync()
-  H->>H: new Transaction(...)
-  alt agregado inválido
-    H->>Cache: SetFailureAsync(taskId)
-    H->>UoW: RollbackAsync()
-    H-->>Consumer: return
+  H->>Read: FirstOrDefaultAsync(AccountByUserIdSpec)
+  H->>H: account.AddTransaction(...)
+  alt domínio inválido
+    H-->>Consumer: Result.Fail (+ cache de falha via pipeline de tarefa)
   end
 
-  H->>WR: AddAsync(entity)
-  H->>H: serializar entity (JSON)
-  H->>OB: AddAsync(OutboxEvent)
-  H->>UoW: SaveChangesAsync()
-  H->>UoW: CommitAsync()
+  H->>Ctx: AddMongo / AddAudit / AddEvent (TransactionExecuted + payloads)
+  H-->>Mediator: Result.Ok (handler retorna)
 
-  H->>Cache: SetSuccessAsync(taskId, payload)
-  H->>Bus: PublishAsync(TransactionProcessedMessage) via AfterCommit
+  Note over Mediator,OB: OutboxBehavior: lê IOutboxContext.Entries e chama IOutboxRepository.AddAsync para cada entrada
+  Note over Mediator,UoW: UnitOfWorkBehavior: SaveChangesAsync + CommitAsync (Account+Transaction+Outbox na mesma transação)
 
-  alt exceção após BeginTransaction
+  Mediator->>Cache: SetSuccessAsync(taskId, payload)
+
+  Note over Consumer: EventsOutboxWorkerService publica TransactionRegisteredIntegrationEvent (cashflow.events)
+
+  alt exceção após abertura da transação
     H->>UoW: RollbackAsync()
     H->>Cache: SetFailureAsync(taskId)
     H-->>Consumer: propaga exceção

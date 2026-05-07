@@ -97,7 +97,7 @@ graph TD
 
     DA["Dashboard API<br/>(dashboard-service)"]
 
-    CF -->|"publish(TransactionProcessed)<br/>amqp://rabbit@rabbitmq:5672"| EX
+    CF -->|"publish(TransactionRegisteredIntegrationEvent)<br/>amqp://rabbit@rabbitmq:5672"| EX
     EX -->|"routing key: # (wildcard)"| Q
     Q -->|"consume"| DA
     DA -.->|"ack (após processamento bem-sucedido)"| Q
@@ -179,46 +179,17 @@ Cada serviço recebe apenas as permissões mínimas necessárias para sua funç�
 
 ## Propagação de contexto de usuário (User Context)
 
-Quando o Gateway roteia uma requisição para uma API downstream, o contexto do usuário autenticado pode ser propagado via headers customizados:
+No **`services/gateway/ocelot.json`** atual, as rotas **não** definem `AddHeadersToRequest` nem `DownstreamHeaderTransform`. O **Ocelot** atua como **proxy HTTP**: o cliente envia `Authorization: Bearer <JWT>` e esse header (junto com os demais da requisição de origem) costuma **chegar às APIs downstream** sem ser substituído pelo gateway. A identidade do usuário continua disponível no **JWT** que a **CashFlow / Dashboard API revalida** com `AddJwtBearer`.
 
-```mermaid
-sequenceDiagram
-    participant C as Cliente Externo
-    participant G as Ocelot Gateway
-    participant A as CashFlow API
-
-    C->>G: GET /cashflow/v1/... + Authorization: Bearer JWT
-
-    Note over G: Valida assinatura e expiração do JWT
-    Note over G: Extrai claims: sub, roles
-
-    G->>A: Requisição roteada
-
-    Note over G,A: Headers propagados pelo Gateway
-    Note right of A: X-User-Id (sub do JWT)
-    Note right of A: X-User-Roles: comerciante
-    Note right of A: X-Correlation-Id: uuid
-
-    Note over A: Associa lançamento ao X-User-Id
-    Note over A: Correlaciona logs pelo X-Correlation-Id
-    Note over A: Não revalida o token
-
-    A-->>G: Resposta
-    G-->>C: Resposta
-```
-
-> **Segurança:** Esses headers só devem ser aceitos pelas APIs quando vierem da rede Docker interna. Um cliente externo que tente injetar `X-User-Id` no header será bloqueado, pois a requisição passa pelo Gateway antes de chegar às APIs — e o Gateway sobrescreve esses headers com os valores do JWT validado.
-
-### Configuração no Ocelot para propagação de claims
+Se no futuro for necessário expor `sub` ou roles como headers separados (por exemplo para logging ou integrações legadas), usa-se a documentação do Ocelot sobre [**header transformation**](https://ocelot.readthedocs.io/en/latest/features/headerstransformation.html), por exemplo:
 
 ```json
-{
-  "AddHeadersToRequest": {
-    "X-User-Id":    "Claims[sub] > value",
-    "X-User-Roles": "Claims[roles] > value"
-  }
+"AddHeadersToRequest": {
+  "X-User-Id": "Claims[sub] > value"
 }
 ```
+
+> **Importante:** qualquer extensão desse tipo deve ser adicionada **explicitamente** ao `ocelot.json` e revisada no PR — **não** está habilitada no repositório hoje.
 
 ---
 

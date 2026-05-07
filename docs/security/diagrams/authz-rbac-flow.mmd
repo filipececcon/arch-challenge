@@ -4,26 +4,28 @@ sequenceDiagram
     actor U as Usuário
     participant A as Angular SPA
     participant G as Ocelot Gateway
-    participant T as KeycloakRoles<br/>ClaimsTransformer
+    participant T as KeycloakRoles<br/>ClaimsTransformation
     participant C as CashFlow API
     participant D as Dashboard API
 
     Note over U,D: Usuário com role: comerciante
 
     U->>A: Acessa módulo de Lançamentos
-    A->>G: GET /cashflow/v1/transactions<br/>Authorization: Bearer <JWT>
+    A->>G: GET /cashflow/v1/accounts/me<br/>Authorization: Bearer <JWT>
 
     G->>G: Decodifica JWT<br/>Encontra realm_access.roles = ["comerciante"]
 
-    Note over G,T: O Ocelot lê o claim "roles" no nível raiz.<br/>Keycloak coloca em realm_access.roles.<br/>O transformer faz o mapeamento.
+    Note over G,T: O Ocelot lê o claim "roles" no nível raiz.<br/>Keycloak coloca em realm_access.roles.<br/>A transformação replica para claim "roles".
 
     G->>T: TransformAsync(ClaimsPrincipal)
-    T->>T: Lê claim "realm_access"<br/>Extrai roles do JSON aninhado<br/>Adiciona claim ClaimTypes.Role = "comerciante"
+    T->>T: Lê claim "realm_access"<br/>Extrai roles do JSON aninhado<br/>Adiciona claim "roles" = "comerciante" (valor simples)
     T->>G: ClaimsPrincipal enriquecido
 
     G->>G: RouteClaimsRequirement:<br/>rota /cashflow/v1/** exige "comerciante" ou "admin"<br/>✅ claim "comerciante" encontrado
 
-    G->>C: Roteia com headers:<br/>X-User-Id: <sub><br/>X-User-Roles: comerciante<br/>X-Correlation-Id: <uuid>
+    Note over G,C: Estado atual: o projeto gateway não usa AddHeadersToRequest.
+    Note over G,C: Em geral o header Authorization Bearer é repassado à API.
+    G->>C: Proxy / roteamento Ocelot
     C->>G: 200 OK + dados
     G->>A: 200 OK + dados
 

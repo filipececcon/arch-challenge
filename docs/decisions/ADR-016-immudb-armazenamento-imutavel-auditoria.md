@@ -27,8 +27,8 @@ Adotar **ImmuDB** como **base de dados imutável** dedicada à **persistência v
 
 | Aspecto | Escolha |
 |---------|---------|
-| **Modelo** | Armazenamento **append-only** com cadeia verificável; escrita via API do cliente (`VerifiedSet` / leitura com verificação conforme documentação ImmuDB). |
-| **Integração** | **Não** na mesma transação OLTP do PostgreSQL: um **worker** (`OutboxAudit`) lê `TB_OUTBOX_AUDIT_EVENT`, grava no ImmuDB e marca processamento — padrão outbox, análogo ao espírito do [ADR-003](./ADR-003-comunicacao-assincrona-rabbitmq.md). |
+| **Modelo** | Armazenamento **append-only** com cadeia verificável; escrita via SQL API do cliente (`SQLExec` para DDL e INSERT, com tabelas por tipo de agregado `TB_AUDIT_{AGGREGATE_TYPE}`). |
+| **Integração** | **Não** na mesma transação OLTP do PostgreSQL: um **worker** (`AuditOutboxWorkerService` no projeto `Agents.Outbox`) lê `TB_OUTBOX` (com `DS_TARGET = 'Audit'`), grava no ImmuDB e marca processamento — padrão outbox, análogo ao espírito do [ADR-003](./ADR-003-comunicacao-assincrona-rabbitmq.md). |
 | **Chaves** | Identificadores determinísticos (ex.: prefixo `audit:{uuid}`) para **idempotência** em reprocessamento. |
 | **API principal** | Serviço **cashflow-api** não conecta ao ImmuDB diretamente; apenas o processo de *outbox-audit* e o projeto de infraestrutura **Immutable** interagem com o ImmuDB. |
 
@@ -84,7 +84,7 @@ A implementação detalhada — componentes, fluxos, payload e configuração �
 **Negativas:**
 
 - **Mais um datastore** para provisionar, monitorar e fazer backup (ver métricas Prometheus e compose na documentação da camada imutável).
-- Curva de aprendizado da equipe em **ImmuDB** (modelo de cliente, `VerifiedSet`, operações de verificação).
+- Curva de aprendizado da equipe em **ImmuDB** (modelo de cliente, SQL API, operações de verificação).
 - Em cenários extremos de falha prolongada do ImmuDB, eventos permanecem no PostgreSQL até processamento — exige **alertas** e runbook (coerente com visão de observabilidade do projeto).
 
 ---

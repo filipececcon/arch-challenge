@@ -31,35 +31,23 @@ Utilizar **Keycloak** como Identity Provider central para autenticação e autor
 
 > **Nota:** A partir do ADR-009, a validação do JWT é feita pelo **API Gateway (Ocelot)** antes de as requisições chegarem às APIs downstream. O fluxo abaixo reflete essa camada adicional.
 
-```
-[Usuário]
-    |
-    | 1. Acessa o frontend (Angular)
-    ↓
-[Angular App]
-    |
-    | 2. Redireciona para login (Authorization Code Flow + PKCE)
-    ↓
-[Keycloak]
-    |
-    | 3. Autentica e emite JWT (Access Token + Refresh Token)
-    ↓
-[Angular App]
-    |
-    | 4. Envia JWT no header Authorization: Bearer <token>
-    ↓
-[Ocelot API Gateway :5000]
-    |
-    | 5. Valida JWT: assinatura RSA, issuer, audience, expiração
-    | 6. Verifica roles via RouteClaimsRequirement (comerciante, admin, gestor)
-    | 7. Encaminha requisição com o header Authorization intacto
-    ↓
-[ASP.NET Core API — CashFlow ou Dashboard]
-    |
-    | 8. Revalida JWT independentemente: assinatura, issuer, audience, expiração
-    |    (defense in depth — camada autônoma, não depende do gateway)
-    | 9. [Authorize] garante token válido; roles NÃO são verificadas aqui
-    |    (fonte única de verdade de autorização = Gateway)
+```mermaid
+sequenceDiagram
+    actor U as Usuário
+    participant A as Angular App
+    participant K as Keycloak
+    participant G as Ocelot API Gateway :5000
+    participant API as ASP.NET Core API<br/>(CashFlow ou Dashboard)
+
+    U->>A: 1. Acessa o frontend
+    A->>K: 2. Redireciona para login<br/>(Authorization Code Flow + PKCE)
+    K-->>A: 3. Autentica e emite JWT<br/>(Access Token + Refresh Token)
+    A->>G: 4. Envia JWT no header<br/>Authorization: Bearer token
+    Note over G: 5. Valida JWT: assinatura RSA,<br/>issuer, audience, expiração
+    Note over G: 6. Verifica roles via<br/>RouteClaimsRequirement<br/>(comerciante, admin, gestor)
+    G->>API: 7. Encaminha requisição com<br/>header Authorization intacto
+    Note over API: 8. Revalida JWT independentemente:<br/>assinatura, issuer, audience, expiração<br/>(defense in depth — camada autônoma)
+    Note over API: 9. [Authorize] garante token válido;<br/>roles NÃO são verificadas aqui<br/>(fonte única de verdade = Gateway)
 ```
 
 ### Configuração de Realm e Clients

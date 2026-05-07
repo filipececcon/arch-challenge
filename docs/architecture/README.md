@@ -50,7 +50,7 @@ Aprofunda a visão interna dos serviços de negócio (CashFlow, Dashboard e Gate
 
 **O que este diagrama mostra:**
 - Camadas internas das APIs (Controllers, Services, Repositories, Domain)
-- Publicação e consumo de eventos via RabbitMQ (`TransactionProcessed` — exchange `cashflow.events`, fila `dashboard.transaction.processed`)
+- Publicação e consumo de eventos via RabbitMQ (`TransactionRegisteredIntegrationEvent`, nome de negócio `TransactionExecuted` no outbox — exchange `cashflow.events`, fila `dashboard.transaction.processed`)
 - Integração do Gateway com o Keycloak para validação de JWT
 - Separação clara entre os bounded contexts CashFlow e Dashboard
 
@@ -102,7 +102,7 @@ A documentação detalhada de cada camada do serviço **Cashflow API** está dis
 | Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./cashflow/layer-06-messaging.md) |
 | Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./cashflow/layer-07-caching.md) |
 | Infrastructure.CrossCutting.Security | [layer-08-security.md](./cashflow/layer-08-security.md) |
-| Imutável — auditoria (Application + Immutable + OutboxAudit) | [layer-09-immutable.md](./cashflow/layer-09-immutable.md) |
+| Imutável — auditoria (Application + Immutable + Agents.Outbox) | [layer-09-immutable.md](./cashflow/layer-09-immutable.md) |
 | I18n (mensagens e cultura) | [layer-10-i18n.md](./cashflow/layer-10-i18n.md) |
 
 ---

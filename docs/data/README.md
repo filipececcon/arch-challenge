@@ -47,7 +47,7 @@ flowchart TB
 |---|-----------|-----------|
 | 1 | **Dados relacionais** | [layer-04-relational.md](../architecture/cashflow/layer-04-relational.md) — EF Core, `UnitOfWork`, outbox de projeção, tabelas transacionais |
 | 2 | **Dados não relacionais (documentos)** | [layer-05-documents.md](../architecture/cashflow/layer-05-documents.md) — MongoDB, `TransactionDocument`, projeção idempotente |
-| 3 | **Dados imutáveis (auditoria)** | [layer-09-immutable.md](../architecture/cashflow/layer-09-immutable.md) — pipeline de auditoria, `TB_OUTBOX_AUDIT_EVENT`, ImmuDB, worker `OutboxAudit` |
+| 3 | **Dados imutáveis (auditoria)** | [layer-09-immutable.md](../architecture/cashflow/layer-09-immutable.md) — pipeline de auditoria, `TB_OUTBOX` (DS_TARGET='Audit'), ImmuDB, worker `AuditOutboxWorkerService` |
 
 ---
 

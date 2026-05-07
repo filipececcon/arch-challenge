@@ -26,9 +26,9 @@ As regras de alerta são **provisionadas via arquivos YAML** em `infra/grafana/p
 
 ```
 infra/grafana/provisioning/alerting/
-├── contact-points.yml       ← para onde vai o alerta (webhook, e-mail, Slack, etc.)
+├── contact-points.yml ← para onde vai o alerta (webhook, e-mail, Slack, etc.)
 ├── notification-policies.yml ← roteamento por severidade e agrupamento
-└── rules.yml                ← regras de alerta por serviço
+└── rules.yml ← regras de alerta por serviço
 ```
 
 ### Regras configuradas

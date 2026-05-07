@@ -9,7 +9,7 @@ API Gateway do projeto Arch Challenge, construído com **ASP.NET Core 8** e **Oc
 
 | Prefixo upstream       | Serviço downstream | Métodos                | Roles exigidas         |
 | ---------------------- | ------------------ | ---------------------- | ---------------------- |
-| `/cashflow/v1/{tudo}`  | CashFlow API       | GET, POST, PUT, DELETE | `comerciante`, `admin` |
+| `/cashflow/v1/{tudo}`  | CashFlow API       | GET, POST, PUT, PATCH, DELETE | `comerciante`, `admin` |
 | `/dashboard/v1/{tudo}` | Dashboard API      | GET                    | `gestor`, `admin`      |
 
 

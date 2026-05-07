@@ -1,5 +1,7 @@
 # Esboço: divisão Data (EF + Mongo) e projeto Outbox
 
+> **Implementação atual no serviço CashFlow:** projetos em `services/cashflow/src/Relational`, `Documents`, `Immutable` e workers em `Agents/Outbox` (assemblies `ArchChallenge.CashFlow.Infrastructure.Data.*`). Use [data/README.md](./README.md) e [architecture/cashflow/](../architecture/cashflow/README.md) como referência principal; o texto abaixo permanece como esboço conceitual de divisão de responsabilidades.
+
 Este documento descreve uma possível organização alinhada à conversa sobre **persistência EF**, **camada de leitura Mongo** e **worker de outbox** como processo ou biblioteca separada.
 
 ## Visão dos projetos

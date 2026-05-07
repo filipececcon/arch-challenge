@@ -16,16 +16,18 @@ O diagrama abaixo mostra os projetos .NET e as **dependências de projeto a proj
 
 ```mermaid
 flowchart LR
-  Api["ArchChallenge.CashFlow.Api"]
+  Api["ArchChallenge.CashFlow.Api<br/>(pasta src/Api)"]
   App["ArchChallenge.CashFlow.Application"]
   Dom["ArchChallenge.CashFlow.Domain"]
-  DSh["ArchChallenge.CashFlow.Domain.Shared"]
-  Rel["Infrastructure.Data.Relational"]
-  Doc["Infrastructure.Data.Documents"]
-  Msg["Infrastructure.CrossCutting.Messaging"]
-  Cch["Infrastructure.CrossCutting.Caching"]
-  Sec["Infrastructure.CrossCutting.Security"]
-  I18n["I18n"]
+  DSh["ArchChallenge.CashFlow.Domain.Shared<br/>(pasta src/Shared)"]
+  Rel["Infrastructure.Data.Relational<br/>(src/Relational)"]
+  Doc["Infrastructure.Data.Documents<br/>(src/Documents)"]
+  Msg["Infrastructure.CrossCutting.Messaging<br/>(src/Messaging)"]
+  Cch["Infrastructure.CrossCutting.Caching<br/>(src/Caching)"]
+  Sec["Infrastructure.CrossCutting.Security<br/>(src/Security)"]
+  I18n["Infrastructure.CrossCutting.I18n<br/>(src/I18n)"]
+  Imm["Infrastructure.Data.Immutable<br/>(src/Immutable)"]
+  Agt["Agents.Outbox<br/>(src/Agents/Outbox)"]
 
   Api --> App
   App --> Dom
@@ -40,8 +42,15 @@ flowchart LR
 
   Rel --> DSh
   Doc --> DSh
+  Imm --> DSh
 
   Msg --> App
+
+  Agt --> Rel
+  Agt --> Doc
+  Agt --> Imm
+  Agt --> Msg
+  Agt --> App
 ```
 
 **Notas:**
@@ -50,7 +59,8 @@ flowchart LR
 - A **Api** referencia camadas de infraestrutura (dados relacional, documentos, mensageria, cache, segurança) e **I18n** para composição na borda da aplicação (detalhe em [layer-10-i18n.md](./layer-10-i18n.md)).
 - **Infrastructure.Data.Relational** e **Infrastructure.Data.Documents** dependem de **Domain.Shared** (tipos e contratos compartilhados).
 - **Infrastructure.CrossCutting.Messaging** referencia **Application** porque os consumidores MassTransit disparam comandos/consultas MediatR (`ISender`, `IRequest`).
-- **`AuditContext`** (responsabilidade de auditoria) vive em **Application** (`Application.Common.Audit`), registrado como scoped na composição da aplicação. Não há projeto separado de auditoria.
+- **Agents.Outbox** é um projeto de worker service independente (com `Program.cs` próprio) que hospeda `MongoOutboxWorkerService`, `EventsOutboxWorkerService` e `AuditOutboxWorkerService`. Ele referencia `Relational` (repositório de outbox), `Documents` (projeção), `Immutable` (auditoria ImmuDB) e `Messaging` (publicação de eventos de integração).
+- **Auditoria e projeções** passam pelo **`IOutboxContext`** scoped na Application (`AddAudit`, `AddMongo`, `AddEvent`), materializados pela camada **Relational**/`OutboxBehavior`/`UnitOfWorkBehavior` e pelos workers do **Agents.Outbox** (ver [layer-09-immutable.md](./layer-09-immutable.md)).
 
 ---
 
@@ -64,41 +74,53 @@ sequenceDiagram
   participant C as Cliente
   participant TCtl as TransactionsController
   participant M as IMediator
-  participant EH as EnqueueCommandHandler
+  participant EBh as EnqueueBehavior
+  participant EH as EnqueueTransactionCommandHandler
   participant TCache as ITaskCacheService
   participant EB as IEventBus
   participant Q as RabbitMQ<br/>cashflow.transaction.create
   participant EC as ExecuteTransactionConsumer
   participant S as ISender (MediatR)
-  participant XH as ExecuteTransactionHandler
-  participant PG as PostgreSQL<br/>OutboxEvent
+  participant XH as ExecuteTransactionCommandHandler
+  participant PG as PostgreSQL<br/>TB_OUTBOX / agregados
   participant EV as cashflow.events
-  participant OW as OutboxWorkerService
+  participant OWm as MongoOutboxWorkerService
+  participant OWe as EventsOutboxWorkerService
+  participant OWa as AuditOutboxWorkerService
   participant MG as MongoDB<br/>TransactionDocument
-  participant TaskCtl as TasksControllers
+  participant IM as ImmuDB<br/>auditoria
+  participant TaskCtl as TasksController
 
-  C->>TCtl: POST /api/transactions
-  TCtl->>M: Send(EnqueueTransaction)
-  M->>EH: EnqueueCommandHandler
-  EH->>TCache: SetPending(taskId)
-  EH->>EB: Publish EnqueueTransactionMessage
+  C->>TCtl: POST /api/accounts/{accountId}/transactions
+  TCtl->>M: Send(EnqueueTransactionCommand)
+  M->>EBh: EnqueueBehavior (TaskId + cache + idempotência)
+  EBh->>TCache: SetPending(taskId)
+  EBh->>EH: próximo handler
+  EH->>EB: PublishAsync(EnqueueTransactionMessage)
   EB->>Q: exchange cashflow.transaction.create
   TCtl-->>C: 202 Accepted taskId
 
   Q->>EC: EnqueueTransactionMessage
-  EC->>S: Send(ExecuteTransaction)
-  S->>XH: ExecuteTransactionHandler
-  XH->>PG: persistência + OutboxEvent
-  XH->>EB: publica evento processado (AfterCommit)
-  EB->>EV: exchange cashflow.events
+  EC->>S: Send(ExecuteTransactionCommand)
+  S->>XH: Handle
+  XH->>PG: Account + Transaction + TB_OUTBOX (Mongo+Audit+Event) na mesma transação
 
-  OW->>PG: lê Outbox / eventos
-  OW->>MG: projeção TransactionDocument
+  OWm->>PG: lê TB_OUTBOX (Target=Mongo)
+  OWm->>MG: upsert TransactionDocument
 
-  C->>TaskCtl: GET /api/tasks/taskId (SSE)
-  TaskCtl->>TCache: stream / leitura estado
+  OWe->>PG: lê TB_OUTBOX (Target=Events)
+  OWe->>EB: PublishAsync(TransactionRegisteredIntegrationEvent)
+  EB->>EV: exchange cashflow.events (Topic)
+
+  OWa->>PG: lê TB_OUTBOX (Target=Audit)
+  OWa->>IM: WriteAuditEntryAsync (SQL append-only)
+
+  C->>TaskCtl: GET /api/tasks/{taskId} (SSE)
+  TaskCtl->>TCache: polling / leitura estado
   TCache-->>C: progresso / resultado
 ```
+
+> **Nota:** o enfileiramento inicial (`EnqueueTransactionCommand`) **não** persiste outbox relacional; o processamento síncrono no consumer (`ExecuteTransactionCommand`) é quem grava o agregado e os três registros de outbox (Mongo, Audit, Events) na mesma transação PostgreSQL.
 
 ---
 
@@ -115,7 +137,7 @@ sequenceDiagram
 | 6 | Infrastructure.CrossCutting.Messaging | [layer-06-messaging.md](./layer-06-messaging.md) |
 | 7 | Infrastructure.CrossCutting.Caching | [layer-07-caching.md](./layer-07-caching.md) |
 | 8 | Infrastructure.CrossCutting.Security | [layer-08-security.md](./layer-08-security.md) |
-| 9 | Imutável — auditoria (Application + Immutable + OutboxAudit) | [layer-09-immutable.md](./layer-09-immutable.md) |
+| 9 | Imutável — auditoria (Application + Immutable + Agents.Outbox) | [layer-09-immutable.md](./layer-09-immutable.md) |
 | 10 | Infrastructure.CrossCutting.I18n | [layer-10-i18n.md](./layer-10-i18n.md) |
 
 ---

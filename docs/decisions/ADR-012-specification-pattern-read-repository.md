@@ -30,8 +30,8 @@ O `IQueryable<T>` permanece **exclusivamente interno** à camada de infraestrutu
 ```
 Shared/
 └── Specifications/
-    ├── ISpecification<T>       ← contrato público (critério, includes, ordenação, paginação)
-    └── Specification<T>        ← classe base abstrata com métodos protegidos
+    ├── ISpecification<T> ← contrato público (critério, includes, ordenação, paginação)
+    └── Specification<T> ← classe base abstrata com métodos protegidos
 
 Domain/
 └── Specifications/
@@ -39,7 +39,7 @@ Domain/
 
 Data/
 └── Specifications/
-    └── SpecificationEvaluator<T>     ← internal; aplica a spec ao IQueryable<T>
+    └── SpecificationEvaluator<T> ← internal; aplica a spec ao IQueryable<T>
 ```
 
 A interface do repositório expõe apenas resultados materializados:
@@ -47,10 +47,13 @@ A interface do repositório expõe apenas resultados materializados:
 ```csharp
 public interface IReadRepository<T> where T : Entity
 {
-    Task<T?>              GetByIdAsync(Guid id, CancellationToken ct = default);
-    Task<T?>              FirstOrDefaultAsync(ISpecification<T> spec, CancellationToken ct = default);
+    Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default);
+
+    Task<T?> FirstOrDefaultAsync(ISpecification<T> spec, CancellationToken ct = default);
+
     Task<IReadOnlyList<T>> ListAsync(ISpecification<T>? spec = null, CancellationToken ct = default);
-    Task<int>             CountAsync(ISpecification<T>? spec = null, CancellationToken ct = default);
+
+    Task<int> CountAsync(ISpecification<T>? spec = null, CancellationToken ct = default);
 }
 ```
 
@@ -59,10 +62,12 @@ Handlers declaram *o que querem* através de specs; o repositório resolve *como
 ```csharp
 // Application — declara intenção
 var spec = new TransactionsOrderedByDateSpec();
+
 var transactions = await repository.ListAsync(spec, cancellationToken);
 
 // Data — resolve internamente
 query = SpecificationEvaluator<T>.GetQuery(_dbSet.AsNoTracking(), spec);
+
 return await query.ToListAsync(cancellationToken);
 ```
 

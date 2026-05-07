@@ -15,8 +15,8 @@ O registro de dependências (`DependencyInjection` da camada Caching) configura 
 
 **Uso no fluxo da aplicação:**
 
-- `EnqueueCommandHandler`: chama `SetPendingAsync` e, quando aplicável, `GetIdempotencyAsync` / `SetIdempotencyAsync`.
-- `ExecuteTransactionHandler`: atualiza o cache com `SetSuccessAsync` ou `SetFailureAsync` conforme o resultado do processamento.
+- **`EnqueueBehavior`** + **`EnqueueTransactionCommandHandler`** (pipeline MediatR / `IEventBus`): tratam **`SetPendingAsync`**, **`GetIdempotencyAsync`** / **`SetIdempotencyAsync`** e publicação (`EnqueueBehavior` faz idempotência e TaskId antes do handler; o handler publica).
+- **`ExecuteTransactionCommandHandler`**: atualiza o cache com `SetSuccessAsync` ou `SetFailureAsync` conforme o resultado do processamento (via pipeline/handlers aplicáveis ao comando de execução).
 - `TasksController` (SSE): consulta `GetAsync` em loop com intervalo de aproximadamente **500 ms** até estado terminal ou cancelamento.
 
 ---

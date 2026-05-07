@@ -1,6 +1,6 @@
-# ADR-011 — Fluent Bit como Ingestor de Logs
+# ADR-011 — Ingestão de Logs com Serilog e Fluent Bit
 
-- **Status:** Aceito
+- **Status:** Aceito (atualizado em 2026-05-07)
 - **Data:** 2026-04-05
 - **Decisores:** Time de Arquitetura
 
@@ -27,38 +27,49 @@ Existem duas abordagens principais:
 
 ## Decisão
 
-Adotar **Fluent Bit** como agente de coleta e ingestão de logs, com as aplicações escrevendo exclusivamente em `stdout` no formato JSON estruturado via Serilog.
+Adotar uma estratégia em **duas fases**:
 
-O Fluent Bit roda como um container separado no `docker-compose`, monta o diretório de logs do Docker via volume e encaminha os logs ao Elasticsearch com buffer em disco para garantir resiliência.
+### Fase atual — Serilog com sink direto para Elasticsearch
 
-### Fluxo adotado
+Na implementação corrente, as aplicações utilizam **`Serilog.Sinks.Elasticsearch`** para gravar logs diretamente no Elasticsearch. Cada serviço configura o sink via `DependencyInjection.cs` do projeto `Logging`, com filtros dedicados para excluir logs de ciclos de poll dos outbox workers (`ElasticsearchOutboxFilters`).
 
-```
-[CashFlow API]  [Dashboard API]  [API Gateway]
-      │                │                │
-      └────────────────┴────────────────┘
-              Serilog → stdout (JSON)
-                        │
-        /var/lib/docker/containers/*/*.log
-                        │
-                   [Fluent Bit]          ← container separado
-                        │
-               buffer em disco           ← resiliência
-                        │
-               [Elasticsearch]
-                        │
-                    [Kibana]
+```mermaid
+flowchart TD
+    A[CashFlow API] -->|Serilog WriteTo.Elasticsearch| G[Elasticsearch]
+    B[Dashboard API] -->|Serilog WriteTo.Elasticsearch| G
+    C[API Gateway] -->|Serilog WriteTo.Console| D[stdout]
+    G --> H[Kibana]
 ```
 
-### Configuração de buffer em disco (resiliência)
+Essa abordagem foi adotada pela **simplicidade de setup** no ambiente de desenvolvimento local (docker-compose) e pela **baixa latência** de entrega de logs ao Kibana.
 
-O Fluent Bit é configurado com `storage.type filesystem`, persistindo chunks não entregues em um volume Docker dedicado. Em caso de indisponibilidade do Elasticsearch, os logs acumulam em disco e são reentregues automaticamente quando o serviço se recupera, sem qualquer impacto ou conhecimento por parte das aplicações.
+### Fase futura — Fluent Bit como agente de coleta
+
+Os arquivos de configuração do **Fluent Bit** já estão preparados em `infra/fluent-bit/` (`fluent-bit.conf`, `parsers.conf`), com buffer em disco (`storage.type filesystem`) e input configurado para ler logs do Docker (`/var/lib/docker/containers/*/*.log`). A migração para o modelo desacoplado (apps → stdout → Fluent Bit → Elasticsearch) é recomendada para **produção**, onde a resiliência a quedas do Elasticsearch é crítica.
+
+```mermaid
+flowchart TD
+    A[CashFlow API] -->|Serilog → stdout JSON| D["/var/lib/docker/containers/*/*.log"]
+    B[Dashboard API] -->|Serilog → stdout JSON| D
+    C[API Gateway] -->|Serilog → stdout JSON| D
+    D --> E["Fluent Bit (container separado)"]
+    E --> F["Buffer em disco (resiliência)"]
+    F --> G[Elasticsearch]
+    G --> H[Kibana]
+```
+
+A transição requer:
+1. Remover o sink `Serilog.Sinks.Elasticsearch` e manter apenas `WriteTo.Console` (JSON estruturado)
+2. Adicionar o container Fluent Bit ao `docker-compose.yml`
+3. Montar o volume de logs Docker no container Fluent Bit
 
 ---
 
 ## Alternativas Consideradas
 
 ### Serilog com sink direto para Elasticsearch (`Serilog.Sinks.Elasticsearch`)
+
+> **Nota:** esta é a abordagem **atualmente implementada** no ambiente de desenvolvimento.
 
 **Prós:**
 - Zero componentes adicionais na infraestrutura
@@ -71,7 +82,7 @@ O Fluent Bit é configurado com `storage.type filesystem`, persistindo chunks n�
 - **Não é a abordagem recomendada pelo Elastic** — o próprio Elastic recomenda a cadeia `App → agente de coleta → Elasticsearch` para ambientes de produção
 - **Enriquecimento de metadados manual** — metadados de infraestrutura (nome do container, imagem Docker, labels) precisam ser adicionados via Serilog Enrichers; um agente adiciona isso automaticamente
 
-**Descartado** em favor de uma abordagem mais resiliente e desacoplada.
+**Mantido para desenvolvimento** pela simplicidade; **recomendado migrar para Fluent Bit em produção** para ganhar resiliência e desacoplamento.
 
 ### Filebeat (Elastic)
 
@@ -105,17 +116,33 @@ O Fluent Bit é configurado com `storage.type filesystem`, persistindo chunks n�
 
 ## Trade-offs Documentados
 
-| Aspecto | Decisão | Trade-off |
+| Aspecto | Fase atual (Serilog direto) | Fase futura (Fluent Bit) |
 |---|---|---|
-| Acoplamento das apps | Apps escrevem apenas em stdout | Apps não conhecem o backend de observabilidade — ganho de desacoplamento, mas requer container adicional |
-| Resiliência | Buffer em disco no Fluent Bit | Logs sobrevivem a quedas do Elasticsearch, mas há limite de disco configurável |
-| Garantia de entrega | At-least-once | Em reconexões pode haver pequenas duplicatas de logs — aceitável para observabilidade |
-| Enriquecimento | Feito pelo Fluent Bit (Docker metadata) | Metadados de infraestrutura automáticos, sem poluir o código das aplicações |
-| Portabilidade | Fluent Bit é padrão em Kubernetes | Facilita migração futura para K8s sem mudança nas aplicações |
+| Acoplamento das apps | Apps acopladas ao Elasticsearch via sink | Apps escrevem apenas em stdout — desacoplamento total |
+| Resiliência | Sem buffer persistente; queda do ES pode perder logs | Buffer em disco no Fluent Bit; logs sobrevivem a quedas |
+| Latência | Mínima (escrita direta) | Levemente maior (intermediário) |
+| Componentes extras | Nenhum | Container Fluent Bit adicional |
+| Enriquecimento | Via Serilog Enrichers (manual) | Automático via Docker metadata |
+| Portabilidade | Vinculada ao Elasticsearch | Fluent Bit é padrão em Kubernetes |
 
 ---
 
 ## Consequências
+
+### Estado atual (Serilog → Elasticsearch direto)
+
+**Positivas:**
+- Setup simples para desenvolvimento local — sem containers adicionais
+- Logs aparecem no Kibana com baixíssima latência
+- Correlação nativa com Elastic APM
+- Filtros customizados (`ElasticsearchOutboxFilters`) excluem logs de polling do outbox, evitando ruído
+
+**Negativas:**
+- Acoplamento direto: indisponibilidade do Elasticsearch pode impactar threads da aplicação
+- Sem buffer persistente: logs não entregues são perdidos em queda do ES
+- Enriquecimento de metadados Docker requer Serilog Enrichers manuais
+
+### Estado futuro (Fluent Bit — recomendado para produção)
 
 **Positivas:**
 - As aplicações ficam completamente desacopladas do backend de observabilidade — uma troca de Elasticsearch por outro destino não exige nenhuma mudança no código

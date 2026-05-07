@@ -1,6 +1,6 @@
 # Camada I18n — ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n
 
-A camada **I18n** é uma biblioteca de classes (`ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n`) que centraliza **recursos de mensagens** (`.resx`), **chaves tipadas** (`MessageKeys`) e o tipo marcador **`Messages`** usado por `IStringLocalizer<Messages>` do ASP.NET Core. A **resolução de cultura** por requisição HTTP fica na **Api** (`LocalizationMiddleware`); a **Application** consome o localizador em **FluentValidation** e em **`CommandHandlerBase`** para textos de negócio consistentes com a cultura atual.
+A camada **I18n** é uma biblioteca de classes (`ArchChallenge.CashFlow.Infrastructure.CrossCutting.I18n`) que centraliza **recursos de mensagens** (`.resx`), **chaves tipadas** (`MessageKeys`) e o tipo marcador **`Messages`** usado por `IStringLocalizer<Messages>` do ASP.NET Core. A **resolução de cultura** por requisição HTTP fica na **Api** (`LocalizationMiddleware`); a **Application** consome o localizador em **FluentValidation** e nos **handlers MediatR** que injetam `IStringLocalizer<Messages>` (ex.: `ExecuteTransactionCommandHandler`).
 
 ---
 
@@ -13,7 +13,7 @@ A camada **I18n** é uma biblioteca de classes (`ArchChallenge.CashFlow.Infrastr
 - Na **Api**, aplicar cultura a partir do cabeçalho **`Accept-Language`** — [LocalizationMiddleware.cs](../../../../services/cashflow/src/Api/Middlewares/LocalizationMiddleware.cs).
 - Encadear DI e pipeline via **`AddLocalizationConfiguration`** / **`UseLocalizationConfiguration`** — [LocalizationExtensions.cs](../../../../services/cashflow/src/Api/Extensions/LocalizationExtensions.cs).
 - Tratar mensagens genéricas de erro no **`ExceptionMiddleware`** (validação, domínio, interno) com o mesmo localizador — [ExceptionMiddleware.cs](../../../../services/cashflow/src/Api/Middlewares/ExceptionMiddleware.cs).
-- Na **Application**, injetar **`IStringLocalizer<Messages>`** em validadores (ex.: `EnqueueTransactionValidator`) e na base de handlers — referência de projeto em [Application.csproj](../../../../services/cashflow/src/Application/Application.csproj).
+- Na **Application**, injetar **`IStringLocalizer<Messages>`** em validadores (ex.: `EnqueueTransactionValidator`) e nos handlers que precisam de mensagens de negócio — referência de projeto em [Application.csproj](../../../../services/cashflow/src/Application/Application.csproj).
 
 ---
 
@@ -44,7 +44,7 @@ Isso define `CultureInfo.CurrentCulture` e `CurrentUICulture` para o restante do
 |-----|------|---------|
 | Envelope de erro HTTP | `ExceptionMiddleware` | Chaves `MessageKeys.Exception.*` — mensagens amigáveis no JSON de erro |
 | Regras FluentValidation | Validators em `Application` | `WithMessage(_ => localizer[MessageKeys.Validation.*])` |
-| Fluxo de comando | `CommandHandlerBase` | `IStringLocalizer<Messages>` disponível aos handlers que herdam a base |
+| Fluxo de comando | Handlers (`IRequestHandler`) | `IStringLocalizer<Messages>` injetado onde necessário (ex.: validação de regras com mensagens de recurso) |
 
 > **Nota:** o corpo de `ValidationException` devolvido ao cliente ainda inclui **`message` por campo** vindas do FluentValidation (já localizadas na cultura corrente quando o validator usa o localizador). O envelope top-level usa as chaves `Exception_*`.
 

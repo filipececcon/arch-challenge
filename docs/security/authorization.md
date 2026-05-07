@@ -4,7 +4,7 @@
 
 A autorização do sistema é baseada em **RBAC (Role-Based Access Control)**, com roles definidas no **Keycloak** e aplicadas pelo **Ocelot API Gateway** antes de qualquer requisição chegar aos serviços de negócio.
 
-A responsabilidade está completamente centralizada no Gateway — as APIs downstream (CashFlow e Dashboard) não implementam nenhuma lógica de autorização, funcionando como serviços de negócio puros dentro da rede interna.
+A autorização na **borda** (Ocelot) é baseada em **RBAC**, com roles definidas no **Keycloak** antes de encaminhar às APIs. Os serviços **CashFlow** e **Dashboard** também **autenticam o JWT Bearer** (`Security:Disabled=false`) e aplicam **`[Authorize]`** nos controllers de negócio — o gateway garante roles (`RouteClaimsRequirement`); a API reforça identidade (`sub`) e ownership de conta.
 
 ---
 
@@ -18,16 +18,23 @@ A responsabilidade está completamente centralizada no Gateway — as APIs downs
 
 ---
 
-## Mapeamento de acesso por rota
+## Mapeamento de acesso por rota (gateway)
 
-| Rota no Gateway | Método | Roles permitidas |
-|---|---|---|
-| `/cashflow/v1/transactions` | `GET` | `comerciante`, `admin` |
-| `/cashflow/v1/transactions` | `POST` | `comerciante`, `admin` |
-| `/cashflow/v1/transactions/{id}` | `GET` | `comerciante`, `admin` |
+O CashFlow expõe **contas** e **transações aninhadas à conta**. Pelo template `/cashflow/v1/{everything}` → `/api/{everything}`, os exemplos abaixo são equivalentes ao downstream.
+
+| Rota no Gateway (prefixo) | Método | Roles (Ocelot) |
+|---------------------------|--------|----------------|
+| `/cashflow/v1/accounts` | `POST` | `comerciante`, `admin` |
+| `/cashflow/v1/accounts/me` | `GET` | `comerciante`, `admin` |
+| `/cashflow/v1/accounts/me/deactivate` | `PATCH` | `comerciante`, `admin` |
+| `/cashflow/v1/accounts/me/activate` | `PATCH` | `comerciante`, `admin` |
+| `/cashflow/v1/accounts/{accountId}/transactions` | `POST`, `GET` | `comerciante`, `admin` |
+| `/cashflow/v1/accounts/{accountId}/transactions/{id}` | `GET` | `comerciante`, `admin` |
 | `/dashboard/v1/daily-balances` | `GET` | `gestor`, `admin` |
 
-> O Ocelot mapeia o prefixo `/cashflow/v1/` para `/api/` no serviço downstream. Portanto, `/cashflow/v1/transactions` → `cashflow-api:8080/api/transactions`.
+> O downstream permanece **`/api/...`** no ASP.NET Core (ex.: `POST https://gateway/cashflow/v1/accounts/{id}/transactions` → serviço `POST /api/accounts/{id}/transactions`). O método **`PATCH`** deve estar habilitado na rota CashFlow do Ocelot para ativar/desativar contas via gateway.
+
+**SSE de tarefas (`GET /api/tasks/{taskId}`):** o `TasksController` **não** usa `[Authorize]` na API. Se o cliente passar pelo gateway em `/cashflow/v1/tasks/{taskId}`, a rota continua coberta pelo **mesmo** `AuthenticationOptions` e `RouteClaimsRequirement` do prefixo Cashflow — é necessário **JWT válido** e role `comerciante` ou `admin`. Em desenvolvimento, chamadas diretas à API (ex.: `localhost:5001`) podem consultar o SSE sem token, conforme a configuração de segurança do serviço.
 
 ---
 
@@ -50,25 +57,35 @@ O Ocelot, por padrão, lê o claim `roles` no nível raiz. Se não houver mapeam
 É necessário implementar um `IClaimsTransformation` no projeto do Gateway para copiar as roles de `realm_access.roles` para o claim padrão `roles`:
 
 ```csharp
-public class KeycloakRolesClaimsTransformer : IClaimsTransformation
+public sealed class KeycloakRolesClaimsTransformation : IClaimsTransformation
 {
     public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        var identity = (ClaimsIdentity)principal.Identity!;
+        if (principal.Identity is not ClaimsIdentity identity)
+            return Task.FromResult(principal);
 
         var realmAccessClaim = identity.FindFirst("realm_access");
         if (realmAccessClaim is null)
             return Task.FromResult(principal);
 
-        var realmAccess = JsonDocument.Parse(realmAccessClaim.Value);
-        if (!realmAccess.RootElement.TryGetProperty("roles", out var roles))
-            return Task.FromResult(principal);
-
-        foreach (var role in roles.EnumerateArray())
+        try
         {
-            var roleName = role.GetString();
-            if (roleName is not null && !identity.HasClaim(ClaimTypes.Role, roleName))
-                identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+            using var realmAccess = JsonDocument.Parse(realmAccessClaim.Value);
+            if (!realmAccess.RootElement.TryGetProperty("roles", out var roles))
+                return Task.FromResult(principal);
+
+            foreach (var role in roles.EnumerateArray())
+            {
+                var roleName = role.GetString();
+                if (roleName is null || identity.HasClaim("roles", roleName))
+                    continue;
+
+                identity.AddClaim(new Claim("roles", roleName));
+            }
+        }
+        catch (JsonException)
+        {
+            return Task.FromResult(principal);
         }
 
         return Task.FromResult(principal);
@@ -79,7 +96,7 @@ public class KeycloakRolesClaimsTransformer : IClaimsTransformation
 Registro no `Program.cs` do Gateway:
 
 ```csharp
-builder.Services.AddSingleton<IClaimsTransformation, KeycloakRolesClaimsTransformer>();
+builder.Services.AddSingleton<IClaimsTransformation, KeycloakRolesClaimsTransformation>();
 ```
 
 ---
@@ -92,21 +109,31 @@ Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar 
 {
   "Routes": [
     {
+      "SwaggerKey": "cashflow",
       "UpstreamPathTemplate": "/cashflow/v1/{everything}",
-      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE"],
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE", "PATCH"],
       "DownstreamPathTemplate": "/api/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [
         { "Host": "cashflow-api", "Port": 8080 }
       ],
       "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
+        "AuthenticationProviderKey": "Bearer",
+        "AllowedScopes": []
       },
       "RouteClaimsRequirement": {
         "roles": "comerciante,admin"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 60
       }
     },
     {
+      "SwaggerKey": "dashboard",
       "UpstreamPathTemplate": "/dashboard/v1/{everything}",
       "UpstreamHttpMethod": ["GET"],
       "DownstreamPathTemplate": "/api/{everything}",
@@ -115,15 +142,29 @@ Com o claims transformer aplicado, o `RouteClaimsRequirement` passa a funcionar 
         { "Host": "dashboard-api", "Port": 8080 }
       ],
       "AuthenticationOptions": {
-        "AuthenticationProviderKey": "Bearer"
+        "AuthenticationProviderKey": "Bearer",
+        "AllowedScopes": []
       },
       "RouteClaimsRequirement": {
         "roles": "gestor,admin"
+      },
+      "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "PeriodTimespan": 60,
+        "Limit": 30
       }
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://localhost:5000"
+    "BaseUrl": "http://localhost:5000",
+    "RateLimitOptions": {
+      "DisableRateLimitHeaders": false,
+      "QuotaExceededMessage": "Too Many Requests — limite de requisições atingido. Tente novamente em instantes.",
+      "HttpStatusCode": 429,
+      "ClientIdHeader": "X-ClientId"
+    }
   }
 }
 ```
@@ -177,12 +218,14 @@ flowchart TD
     A[Angular SPA\nBearer JWT] --> G[Ocelot Gateway]
     G --> V1[Valida assinatura JWT\nvia JWKS do Keycloak]
     V1 --> V2[Valida issuer, audience\ne expiração]
-    V2 --> V3[KeycloakRolesClaimsTransformer\nrealm_access.roles → ClaimTypes.Role]
+    V2 --> V3[KeycloakRolesClaimsTransformation\nrealm_access.roles → claim roles]
     V3 --> V4{RouteClaimsRequirement\nrole autorizada?}
     V4 -- Sim --> C[CashFlow API ou Dashboard API\nrecebe requisição já autorizada]
     V4 -- Não --> E[403 Forbidden\nrequisição bloqueada no Gateway]
-    C --> B[Lógica de negócio pura\nsem camada de autorização]
+    C --> B[Lógica de negócio pura\nsem camada de autorização por role na API]
 ```
+
+> **Claims no gateway:** a transformação registra valores no claim textual `"roles"` (valor simples por role), que o `RouteClaimsRequirement` do Ocelot espera ao validar políticas por rota.
 
 ### Defense in depth: autenticação na API downstream
 

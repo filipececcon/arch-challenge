@@ -22,8 +22,8 @@ A tabela resume o papel de cada canal em termos de exchange, tipo e produtores/c
 
 | Canal | Exchange | Tipo | Producer | Consumer |
 |-------|----------|------|----------|----------|
-| `cashflow.transaction.create` | `cashflow.transaction.create` | Fanout (padrão MassTransit) | `EnqueueCommandHandler` via `IEventBus` | `ExecuteTransactionConsumer` |
-| `cashflow.events` | `cashflow.events` | Topic | `CommandHandlerBase` via `IEventBus` (AfterCommit) | Serviços externos (ex: Dashboard) |
+| `cashflow.transaction.create` | `cashflow.transaction.create` | Fanout (padrão MassTransit) | `EnqueueTransactionCommandHandler` via **`EnqueueBehavior`** + `IEventBus` | `ExecuteTransactionConsumer` |
+| `cashflow.events` | `cashflow.events` | Topic | `EventsOutboxWorkerService` via `IEventBus` | Serviços externos (ex: Dashboard) |
 
 ---
 
@@ -35,7 +35,8 @@ A tabela resume o papel de cada canal em termos de exchange, tipo e produtores/c
 classDiagram
     class IEventBus {
         <<interface>>
-        +PublishAsync~T~(T, CancellationToken) Task
+        +PublishAsync~T~(T message, CancellationToken) Task
+        +PublishAsync(object message, Type messageType, CancellationToken) Task
     }
 
     class IPublishEndpoint {
@@ -94,13 +95,15 @@ classDiagram
 
 ```mermaid
 sequenceDiagram
-    participant EnqueueCommandHandler
+    participant EB as EnqueueBehavior
+    participant EH as EnqueueTransactionCommandHandler
     participant IEventBus
     participant MassTransitEventBus
     participant IPublishEndpoint
     participant RabbitMQ as RabbitMQ (exchange cashflow.transaction.create)
 
-    EnqueueCommandHandler->>IEventBus: PublishAsync(EnqueueTransactionMessage)
+    EB->>EH: após TaskId/cache — Handle(command)
+    EH->>IEventBus: PublishAsync(EnqueueTransactionMessage)
     IEventBus->>MassTransitEventBus: PublishAsync(EnqueueTransactionMessage)
     MassTransitEventBus->>IPublishEndpoint: Publish(message)
     IPublishEndpoint->>RabbitMQ: roteia para exchange cashflow.transaction.create
@@ -119,31 +122,31 @@ sequenceDiagram
     participant MassTransit
     participant ExecuteTransactionConsumer
     participant ISender
-    participant ExecuteTransactionHandler
+    participant ExecuteTransactionCommandHandler
 
     RabbitMQ->>MassTransit: entrega EnqueueTransactionMessage na fila
     MassTransit->>ExecuteTransactionConsumer: Consume(ConsumeContext)
     ExecuteTransactionConsumer->>ExecuteTransactionConsumer: ConsumeAsync(msg)
     ExecuteTransactionConsumer->>ExecuteTransactionConsumer: BuildCommand(msg)
-    Note over ExecuteTransactionConsumer: new ExecuteTransaction{TaskId, Type, ...}\ncom UserId=msg.UserId e OccurredAt=msg.OccurredAt
-    ExecuteTransactionConsumer->>ISender: Send(ExecuteTransaction)
-    ISender->>ExecuteTransactionHandler: despacha comando (com identidade preservada)
+    Note over ExecuteTransactionConsumer: ExecuteTransactionCommand (TaskId, Type...)\ncom UserId/OccurredAt da mensagem
+    ExecuteTransactionConsumer->>ISender: Send(ExecuteTransactionCommand)
+    ISender->>ExecuteTransactionCommandHandler: despacha comando (com identidade preservada)
 ```
 
 ---
 
-## Diagrama de Sequência — Publicação de TransactionProcessedMessage (Integration Event)
+## Diagrama de Sequência — Publicação do evento de integração (`TransactionRegisteredIntegrationEvent`)
 
-`CommandHandlerBase` publica diretamente no `IEventBus` após o commit, via callback `AfterCommit`. Não há `IPublisher` (MediatR) nem handler intermediário neste fluxo.
+As entradas de outbox de eventos são persistidas na mesma transação do agregado (`OutboxBehavior` + `UnitOfWorkBehavior`). O **`EventsOutboxWorkerService`** lê a tabela de outbox e publica no RabbitMQ via `IEventBus` (exchange **`cashflow.events`**, tipo Topic).
 
 ```mermaid
 sequenceDiagram
-    participant ExecuteTransactionHandler
-    participant IEventBus
+    participant Worker as EventsOutboxWorkerService
+    participant IEventBus as IEventBus
     participant RabbitMQ as RabbitMQ (exchange cashflow.events, Topic)
 
-    ExecuteTransactionHandler->>IEventBus: PublishAsync(TransactionProcessedMessage) via AfterCommit
-    IEventBus->>RabbitMQ: publica no exchange cashflow.events (Topic)
+    Worker->>IEventBus: PublishAsync(TransactionRegisteredIntegrationEvent)
+    IEventBus->>RabbitMQ: publica no exchange cashflow.events
 ```
 
 ---
@@ -152,8 +155,8 @@ sequenceDiagram
 
 | Mensagem | Campos | Observação |
 |----------|--------|------------|
-| `EnqueueTransactionMessage` | `TaskId`, `UserId`, `OccurredAt`, `Type`, `Amount`, `Description` | Publicada pelo `EnqueueCommandHandler`; `UserId` e `OccurredAt` propagam identidade HTTP para o worker assíncrono |
-| `TransactionProcessedMessage` | `EventId`, `OccurredAt`, `Payload` (JSON do agregado) | Publicada pelo `CommandHandlerBase` via callback `AfterCommit`; consumida por serviços externos (ex: Dashboard) |
+| `EnqueueTransactionMessage` | `TaskId`, `UserId`, `OccurredAt`, `Type`, `Amount`, `Description` | Publicada pelo `EnqueueTransactionCommandHandler`; `UserId` e `OccurredAt` propagam identidade HTTP para o worker assíncrono |
+| `TransactionRegisteredIntegrationEvent` | `EventId`, `EventName`, `OccurredAt`, `Payload` (`TransactionRegisteredPayload`) | Registrada no outbox relacional pelo handler de execução; publicação no broker pelo `EventsOutboxWorkerService`; consumida pelo Dashboard |
 
 ---
 
@@ -161,4 +164,4 @@ sequenceDiagram
 
 - A escolha de **RabbitMQ** como broker e o uso de MassTransit para abstrair transporte e endpoints estão registrados no [ADR-003 — Comunicação assíncrona com RabbitMQ](../../decisions/ADR-003-comunicacao-assincrona-rabbitmq.md).
 - O **formato JSON** das mensagens de integração e convenções associadas estão no [ADR-007 — Formato de mensagens JSON](../../decisions/ADR-007-formato-mensagens-json.md).
-- **Propagação de identidade pela mensagem**: `UserId` e `OccurredAt` são carregados em `EnqueueTransactionMessage` para que o consumer reconstrua a identidade do usuário no `ExecuteTransaction`, habilitando auditoria correta mesmo após o boundary assíncrono (detalhes em [layer-09-immutable.md](./layer-09-immutable.md)).
+- **Propagação de identidade pela mensagem**: `UserId` e `OccurredAt` são carregados em `EnqueueTransactionMessage` para que o consumer reconstrua a identidade do usuário no **`ExecuteTransactionCommand`**, habilitando auditoria correta mesmo após o boundary assíncrono (detalhes em [layer-09-immutable.md](./layer-09-immutable.md)).

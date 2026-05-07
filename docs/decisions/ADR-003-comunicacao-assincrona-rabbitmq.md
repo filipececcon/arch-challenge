@@ -24,7 +24,7 @@ Adicionalmente, o Dashboard deve suportar **50 requisições por segundo** com n
 
 Adotar **comunicação assíncrona baseada em eventos** utilizando **RabbitMQ** como broker de mensagens.
 
-O CashFlow publica o evento `TransactionProcessed` em uma exchange do RabbitMQ após persistir a transação com sucesso. O Dashboard consome essa fila de forma independente e atualiza o consolidado diário.
+O CashFlow publica o evento de integração **`TransactionRegisteredIntegrationEvent`** (pacote `ArchChallenge.Contracts`) na exchange **`cashflow.events`** após persistir a transação e registrar o outbox. O nome de negócio gravado no outbox relacional para essa operação é **`TransactionExecuted`**. O Dashboard consome a fila dedicada de forma independente e atualiza o consolidado diário.
 
 ### Topologia de mensagens
 
@@ -35,32 +35,32 @@ sequenceDiagram
     participant Q as Queue: dashboard.transaction.processed
     participant D as Dashboard API
 
-    C->>E: publish TransactionProcessed
+    C->>E: publish TransactionRegisteredIntegrationEvent (eventName: TransactionExecuted)
     E->>Q: routing key: # (wildcard)
     Q->>D: consume
 ```
 
 ### Contrato do evento
 
-O evento publicado na exchange `cashflow.events` segue a estrutura de `DomainEvent`. O campo `payload` contém o JSON serializado da entidade `Transaction`:
+O tipo .NET compartilhado é `TransactionRegisteredIntegrationEvent`. O payload segue o registro `TransactionRegisteredPayload` (campos em **camelCase** na serialização JSON):
 
 ```json
 {
   "eventId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "eventName": "TransactionProcessed",
+  "eventName": "TransactionExecuted",
   "occurredAt": "2026-04-03T10:00:00Z",
   "payload": {
-    "Id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "Type": 1,
-    "Amount": 150.00,
-    "Description": "Venda à vista",
-    "CreatedAt": "2026-04-03T10:00:00Z",
-    "UpdatedAt": "2026-04-03T10:00:00Z",
-    "Active": true
+    "type": "CREDIT",
+    "amount": 150.00,
+    "accountId": "3fa85f64-5717-4562-b3fc-2c963f66afa7",
+    "balanceAfter": 1150.00,
+    "description": "Venda à vista",
+    "userId": "keycloak-sub-uuid"
   }
 }
 ```
-> **Legenda de `Type`:** `1` = Credit, `2` = Debit.
+
+> **`type`:** string (`CREDIT` / `DEBIT`) conforme implementação atual do produtor.
 
 ---
 

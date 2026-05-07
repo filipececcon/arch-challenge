@@ -36,7 +36,7 @@ Separar o sistema em **dois bounded contexts distintos**, cada um com seu própr
 | Feature Module Angular (`/cashflow`) | Interface para o comerciante registrar débitos e créditos |
 | Banco de dados (PostgreSQL) | Persistência dos lançamentos |
 | Read model (MongoDB) | Projeções para consultas otimizadas |
-| Publicação de eventos | Emite evento `LancamentoRegistrado` no RabbitMQ |
+| Publicação de eventos | Emite evento `TransactionRegisteredIntegrationEvent` no RabbitMQ (eventName: `TransactionExecuted`) |
 
 ### Dashboard
 
@@ -45,7 +45,7 @@ Separar o sistema em **dois bounded contexts distintos**, cada um com seu própr
 | Backend (ASP.NET Core) | Consome eventos e expõe API do consolidado diário |
 | Feature Module Angular (`/dashboard`) | Interface para visualização do saldo e relatórios diários |
 | Banco de dados (PostgreSQL) | Persistência do consolidado calculado |
-| Consumo de eventos | Processa evento `LancamentoRegistrado` do RabbitMQ |
+| Consumo de eventos | Processa evento `TransactionRegisteredIntegrationEvent` do RabbitMQ |
 
 > O frontend é uma **SPA Angular 19 unificada** (`services/frontend`) com os dois domínios como feature modules lazy-loaded. Não há dois projetos Angular separados — ver [ADR-010](./ADR-010-frontend-unificado-com-feature-modules.md).
 

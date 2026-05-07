@@ -15,6 +15,7 @@ O projeto **ArchChallenge.CashFlow.Api** é o host ASP.NET Core do serviço Cash
 - **Localização** de mensagens conforme cabeçalho **Accept-Language**, aplicada por middleware na pipeline (especificação e links para o código em [layer-10-i18n.md](./layer-10-i18n.md)).
 - **Middleware de exceções** centralizado (`ExceptionMiddleware`), que captura falhas não tratadas e devolve resposta HTTP consistente.
 - **Migração automática** do banco relacional na inicialização (`MigrateAsync`), garantindo schema atualizado antes de servir tráfego.
+- Cabeçalho **`Idempotency-Key`** obrigatório no **POST** de transação (valor vazio = nova operação; UUID = deduplicação).
 - Endpoint **SSE** em **`GET /api/tasks/{taskId}`** para acompanhamento assíncrono do processamento de lançamentos enfileirados (stream `text/event-stream` com polling no cache a intervalos curtos até estado final).
 
 ---
@@ -27,13 +28,20 @@ Visão simplificada dos controllers da borda HTTP, middlewares e contratos injet
 
 ```mermaid
 classDiagram
+    class AccountsController {
+        +Create()
+        +GetMe()
+        +Deactivate()
+        +Activate()
+    }
+
     class TransactionsController {
         +Create()
         +GetById()
         +List()
     }
 
-    class TasksControllers {
+    class TasksController {
         +GetTaskStatus()
     }
 
@@ -48,14 +56,15 @@ classDiagram
         <<interface>>
     }
 
+    AccountsController --> IMediator : usa
     TransactionsController --> IMediator : usa
-    TasksControllers --> ITaskCacheService : usa
+    TasksController --> ITaskCacheService : usa
 ```
 
 **Notas:**
 
 - `TransactionsController` aplica `[Authorize]` nas rotas de transações; comandos e consultas são enviados ao **MediatR**.
-- `TasksControllers` não exige JWT no código atual: o cliente acompanha o `taskId` retornado no **202 Accepted** do POST.
+- `TasksController` não exige JWT no código atual: o cliente acompanha o `taskId` retornado no **202 Accepted** do POST.
 - `ExceptionMiddleware` e `LocalizationMiddleware` participam da pipeline global configurada em `Program.cs` e extensões.
 
 ---
@@ -66,21 +75,27 @@ classDiagram
 
 | Método | Rota | Autenticado | Descrição | Retorno |
 |--------|------|-------------|-----------|---------|
-| POST | `/api/transactions` | Sim | Enfileira lançamento; cabeçalho opcional `Idempotency-Key` (UUID) | `202` com `{ taskId }`; validação inválida `400` |
-| GET | `/api/transactions/{id}` | Sim | Detalhe do lançamento por identificador | `200` com `TransactionResult`; não encontrado `404` |
-| GET | `/api/transactions` | Sim | Lista com filtros (`type`, `active`, `minAmount`, `maxAmount`, `createdFrom`, `createdTo`) | `200` com `GetAllTransactionsResult`; parâmetros inválidos `400` |
-| GET | `/api/tasks/{taskId}` | Não | Stream SSE com status da tarefa (polling interno até sucesso ou falha) | `text/event-stream`; evento inicial `not_found` se não houver tarefa |
+| POST | `/api/accounts` | Sim | Cria a conta do usuário (`sub`); 409 se já existir | `201` com envelope `Result<CreateAccountResult>` |
+| GET | `/api/accounts/me` | Sim | Dados da conta corrente do usuário | `200` com `GetMyAccountResult`; `404` |
+| PATCH | `/api/accounts/me/deactivate` | Sim | Desativa conta (soft-delete) | `204` ou erro via `ToActionResult()` |
+| PATCH | `/api/accounts/me/activate` | Sim | Reativa conta | `204` ou erro via `ToActionResult()` |
+| POST | `/api/accounts/{accountId}/transactions` | Sim | Enfileira lançamento; header **`Idempotency-Key` obrigatório** (vazio ou UUID) | `202` com `{ taskId }`; `400` / `404` |
+| GET | `/api/accounts/{accountId}/transactions/{id}` | Sim | Detalhe do lançamento | `200` com `GetTransactionByIdResult`; `404` |
+| GET | `/api/accounts/{accountId}/transactions` | Sim | Lista (Mongo) com filtros de query | `200` com `GetAllTransactionsResult`; `400` / `404` |
+| GET | `/api/tasks/{taskId}` | Não | Stream SSE com status da tarefa | `text/event-stream`; evento inicial `not_found` se não houver tarefa |
 | GET | `/metrics` | Não | Métricas no formato Prometheus | `text/plain` |
 | GET | `/health/liveness` | Não | Liveness: processo respondendo, sem testar dependências | `200` JSON |
 | GET | `/health/readiness` | Não | Readiness: agrega checagens marcadas como prontas (SQL, Mongo, Redis, RabbitMQ) | `200` ou `503` JSON |
 
+**Borda com gateway:** com o prefixo configurado no Ocelot, as mesmas rotas aparecem externamente como `/cashflow/v1/accounts`, `/cashflow/v1/accounts/{accountId}/transactions`, etc. (o segmento `/api/` é substituído pelo prefixo `/cashflow/v1/`).
+
 ---
 
-## Diagrama de Sequência — POST `/api/transactions`
+## Diagrama de Sequência — POST `/api/accounts/{accountId}/transactions`
 
 ### Enfileiramento e resposta 202
 
-Fluxo simplificado do aceite do lançamento: validação e handler genérico de enfileiramento registram a tarefa no cache e publicam mensagem no barramento de eventos.
+Fluxo simplificado do aceite do lançamento: validação pipeline, **`EnqueueBehavior`** (cache/idempotência/`TaskId`) e **`EnqueueTransactionCommandHandler`** (publicação na fila).
 
 ```mermaid
 sequenceDiagram
@@ -90,19 +105,21 @@ sequenceDiagram
     participant JWT as JwtBearer<br/>(UseAuthentication)
     participant TC as TransactionsController
     participant M as IMediator
-    participant EH as EnqueueCommandHandler
+    participant EBh as EnqueueBehavior
+    participant EH as EnqueueTransactionCommandHandler
     participant TCS as ITaskCacheService
     participant EB as IEventBus
 
-    C->>EM: POST /api/transactions
+    C->>EM: POST /api/accounts/{accountId}/transactions
     EM->>JWT: encaminha pipeline
     JWT->>TC: requisição autenticada
-    TC->>M: Send(EnqueueTransaction)
-    M->>EH: Handle(command)
-    EH->>TCS: registro de tarefa / idempotência
+    TC->>M: Send(EnqueueTransactionCommand)
+    M->>EBh: EnqueueBehavior (pipeline)
+    EBh->>TCS: Pending / idempotência
+    EBh->>EH: próximo handler
     EH->>EB: PublishAsync(mensagem)
     EB-->>EH: ok
-    EH-->>M: EnqueueResult(taskId)
+    EH-->>M: EnqueueTransactionResult(taskId)
     M-->>TC: resultado
     TC-->>C: 202 Accepted { taskId }
 ```

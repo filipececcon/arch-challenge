@@ -33,11 +33,19 @@ Cada backend seguirá a arquitetura em camadas com separação clara de responsa
 services/cashflow/
 ├── ArchChallenge.CashFlow.sln
 ├── src/
+│   ├── Agents/                 ← Workers de background (Outbox)
 │   ├── Api/                    ← Apresentação (Controllers, Middlewares)
 │   ├── Application/            ← Casos de uso, DTOs, interfaces
-│   ├── Domain/                 ← Entidades, regras de negócio, eventos
-│   ├── Data/                   ← Repositórios, EF Core
-│   └── Messaging/              ← Consumidores/publicação RabbitMQ
+│   ├── Caching/                ← CrossCutting: Redis / ITaskCacheService
+│   ├── Documents/              ← Infraestrutura: MongoDB (read models)
+│   ├── Domain/                 ← Entidades, regras de negócio
+│   ├── I18n/                   ← CrossCutting: internacionalização
+│   ├── Immutable/              ← Infraestrutura: ImmuDB (auditoria)
+│   ├── Logging/                ← CrossCutting: Serilog, base dos workers
+│   ├── Messaging/              ← CrossCutting: MassTransit / RabbitMQ
+│   ├── Relational/             ← Infraestrutura: EF Core / PostgreSQL
+│   ├── Security/               ← CrossCutting: JWT / Keycloak
+│   └── Shared/                 ← Domain.Shared: interfaces, enums, entidades base
 └── tests/
     ├── Unit/
     └── Integration/

@@ -87,11 +87,14 @@ classDiagram
 
     class TransactionDocument {
         +Guid Id
+        +Guid AccountId
         +string Type
         +decimal Amount
-        +string Description
+        +decimal BalanceAfter
+        +string? Description
         +bool Active
         +DateTime CreatedAt
+        +DateTime UpdatedAt
     }
 
     class TransactionDocumentClassMap {
